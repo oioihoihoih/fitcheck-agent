@@ -14,10 +14,12 @@ import {
   type TraceEntry,
 } from "./api";
 import { useRunStream } from "./useRunStream";
+import { getRun } from "./api";
 import { AgentActivity } from "./components/AgentActivity";
 import { Candidates } from "./components/Candidates";
 import { ControlsDrawer, type RunControlsForm } from "./components/ControlsDrawer";
 import { Markdown } from "./components/Markdown";
+import { HistoryDrawer, useHistory } from "./components/HistoryDrawer";
 
 interface Turn {
   id: string;
@@ -53,16 +55,77 @@ export function App() {
     searchProvider: "",
     refreshWeb: false,
   });
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyRefresh, setHistoryRefresh] = useState(0);
   const streamRef = useRef<HTMLDivElement>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
   const liveTurnId = useRef<string | null>(null);
+  const loadedRunId = useRef<string | null>(null);
 
   const { run, streamedText, status: runStatus } = useRunStream(runId);
   const running = !!runId && !isTerminal(runStatus);
+  const history = useHistory(historyRefresh);
 
   useEffect(() => {
     getStatus().then(setStatus).catch(() => setStatus(null));
   }, []);
+
+  // docs/25 P0-4: restore a run from the URL on first load and on back/forward.
+  useEffect(() => {
+    const applyFromUrl = () => {
+      const id = new URLSearchParams(window.location.search).get("run");
+      if (id && id !== loadedRunId.current) loadRun(id, false);
+      if (!id) {
+        loadedRunId.current = null;
+        setRunId(null);
+        setTurns([]);
+      }
+    };
+    applyFromUrl();
+    window.addEventListener("popstate", applyFromUrl);
+    return () => window.removeEventListener("popstate", applyFromUrl);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Keep the URL in sync with the active run so refresh/share restores it.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const current = params.get("run");
+    if (runId && runId !== current) {
+      params.set("run", runId);
+      window.history.replaceState({}, "", `?${params.toString()}`);
+    } else if (!runId && current) {
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+  }, [runId]);
+
+  // Refresh the history list when a run starts (so a running run shows up right
+  // away) and again when it reaches a terminal state.
+  useEffect(() => {
+    if (runId) setHistoryRefresh((n) => n + 1);
+  }, [runId]);
+  useEffect(() => {
+    if (run && isTerminal(run.status)) setHistoryRefresh((n) => n + 1);
+  }, [run?.status]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Load a past run into the conversation view (rebuild turns from its record).
+  async function loadRun(id: string, pushUrl = true) {
+    try {
+      loadedRunId.current = id;
+      const full = await getRun(id);
+      if (full.status === "not_found") return;
+      setTurns(rebuildTurns(full));
+      setRunId(id);
+      setHistoryOpen(false);
+      if (pushUrl) {
+        const params = new URLSearchParams(window.location.search);
+        params.set("run", id);
+        window.history.pushState({}, "", `?${params.toString()}`);
+      }
+    } catch {
+      /* ignore */
+    }
+  }
 
   // Feed streamed text + live trace/candidates into the live agent turn.
   useEffect(() => {
@@ -204,12 +267,35 @@ export function App() {
     setTurns([]);
     setBanner(null);
     liveTurnId.current = null;
+    loadedRunId.current = null;
+    setHistoryOpen(false);
+    // "새 대화" archives the current run (it stays in history) rather than losing it.
+    window.history.pushState({}, "", window.location.pathname);
+    setHistoryRefresh((n) => n + 1);
   }
 
   return (
     <div className="app">
+      <HistoryDrawer
+        open={historyOpen}
+        entries={history}
+        activeRunId={runId}
+        onSelect={(id) => loadRun(id)}
+        onClose={() => setHistoryOpen(false)}
+        onNew={newSession}
+      />
       <div className="topbar">
         <div className="brand">
+          <button
+            className="icon-btn hist-btn"
+            onClick={() => {
+              setHistoryRefresh((n) => n + 1);
+              setHistoryOpen(true);
+            }}
+            aria-label="탐색 기록"
+          >
+            ☰
+          </button>
           <div className="mark">F</div>
           <div className="name">
             FitCheck
@@ -360,6 +446,32 @@ function missingInfoQuestions(run: AgentRun): string {
     .map((it) => (typeof it === "string" ? it : (it?.question as string) || (it?.prompt as string) || ""))
     .filter(Boolean);
   return qs.join("\n\n");
+}
+
+// docs/25 P0-4: rebuild the conversation turns from a persisted run so a past
+// run can be reopened. The initial user message comes from input.free_text /
+// candidate_url; each user_reply is a follow-up user turn; the final agent turn
+// carries the report + trace + candidates.
+function rebuildTurns(run: AgentRun): Turn[] {
+  const input = (run as { input?: { free_text?: string; candidate_url?: string; user_replies?: Array<{ message?: string }> } }).input;
+  const out: Turn[] = [];
+  const firstText = input?.free_text?.trim() || input?.candidate_url?.trim() || (run as { goal?: string }).goal || "";
+  if (firstText) out.push({ id: rid(), role: "user", text: firstText });
+  for (const reply of input?.user_replies ?? []) {
+    if (reply?.message?.trim()) out.push({ id: rid(), role: "user", text: reply.message.trim() });
+  }
+  out.push({
+    id: rid(),
+    role: "agent",
+    text: finalAgentText(run),
+    trace: run.trace ?? [],
+    candidates: run.state?.match_results ?? [],
+    reportType: run.final_report?.report_type,
+    grounded: run.final_report?.grounded,
+    degraded: run.final_report?.degraded === true,
+    waiting: run.status === "waiting_for_user",
+  });
+  return out;
 }
 
 function rid(): string {
