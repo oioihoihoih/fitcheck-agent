@@ -35,7 +35,12 @@ export function CitationReceipts({
 
   return (
     <div className="receipts">
-      <button className={`receipts-head ${open ? "open" : ""}`} onClick={() => setOpen((o) => !o)}>
+      <button
+        className={`receipts-head ${open ? "open" : ""}`}
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        aria-label={`근거 영수증 ${open ? "접기" : "펼치기"}`}
+      >
         <span className={`ground-badge ${grounded ? "ok" : "warn"}`}>
           {grounded ? "✓ 근거 검증됨" : "⚠ 근거 확인 필요"}
         </span>

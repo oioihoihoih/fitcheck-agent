@@ -382,22 +382,28 @@ export function App() {
           </div>
         </div>
         <div className="topbar-right">
-          <div className="view-switch">
+          <div className="view-switch" role="tablist" aria-label="화면 전환">
             <button
               className={`view-tab ${view === "chat" ? "active" : ""}`}
               onClick={() => setView("chat")}
+              role="tab"
+              aria-selected={view === "chat"}
             >
               탐색
             </button>
             <button
               className={`view-tab ${view === "closet" ? "active" : ""}`}
               onClick={() => setView("closet")}
+              role="tab"
+              aria-selected={view === "closet"}
             >
               내 옷장
             </button>
             <button
               className={`view-tab ${view === "favorites" ? "active" : ""}`}
               onClick={() => setView("favorites")}
+              role="tab"
+              aria-selected={view === "favorites"}
             >
               저장함
             </button>
@@ -464,7 +470,7 @@ export function App() {
                     <AgentActivity trace={t.trace ?? []} running={!!t.live} />
                   )}
                   {(t.text || t.streaming) && (
-                    <div className="bubble">
+                    <div className="bubble" aria-live={t.streaming ? "polite" : undefined}>
                       {t.streaming ? (
                         <>
                           {t.text}
@@ -494,7 +500,15 @@ export function App() {
               ),
             )
           )}
-          {banner && <div className={`banner ${banner.kind}`}>{banner.text}</div>}
+          {banner && (
+            <div
+              className={`banner ${banner.kind}`}
+              role={banner.kind === "error" ? "alert" : "status"}
+              aria-live={banner.kind === "error" ? "assertive" : "polite"}
+            >
+              {banner.text}
+            </div>
+          )}
         </div>
       </div>
 
@@ -502,7 +516,7 @@ export function App() {
         {showControls && <ControlsDrawer form={form} onChange={setForm} disabled={running} />}
         <div className="composer">
           {running && (
-            <div className="running-strip">
+            <div className="running-strip" role="status" aria-live="polite">
               <span className="spinner" />
               에이전트 실행 중 · 메시지를 보내면 진행 중 작업에 반영됩니다
             </div>
@@ -576,7 +590,11 @@ export function App() {
             </button>
           </div>
           <div className="composer-foot">
-            <button className="settings-toggle" onClick={() => setShowControls((s) => !s)}>
+            <button
+              className="settings-toggle"
+              onClick={() => setShowControls((s) => !s)}
+              aria-expanded={showControls}
+            >
               ⚙ 실행 설정 {showControls ? "닫기" : ""}
             </button>
             <span>Enter 전송 · Shift+Enter 줄바꿈{runId ? ` · ${runId.slice(0, 12)}` : ""}</span>

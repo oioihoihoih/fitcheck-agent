@@ -36,7 +36,12 @@ export function AgentActivity({
 
   return (
     <div className="activity">
-      <button className={`activity-head ${open ? "open" : ""}`} onClick={() => setOpen((o) => !o)}>
+      <button
+        className={`activity-head ${open ? "open" : ""}`}
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        aria-label={`에이전트 작업 단계 ${open ? "접기" : "펼치기"}`}
+      >
         <span className="chev">▶</span>
         <SparkIcon spinning={running} />
         <span className="label">{label}</span>
