@@ -204,6 +204,51 @@ class ClosetListResponse(BaseModel):
     items: list[ClosetItemResponse] = Field(default_factory=list)
 
 
+class FavoriteUpsertRequest(BaseModel):
+    """Save a candidate for later comparison across sessions. docs/25 P1-2."""
+
+    model_config = ConfigDict(extra="allow")
+
+    id: str | None = None
+    candidate_key: str | None = Field(default=None, max_length=300)
+    name: str | None = Field(default=None, max_length=300)
+    source_url: str | None = Field(default=None, max_length=MAX_CANDIDATE_URL_CHARS)
+    recommendation: str | None = Field(default=None, max_length=60)
+    score: dict[str, Any] = Field(default_factory=dict)
+    from_run_id: str | None = Field(default=None, max_length=80)
+    notes: str | None = Field(default=None, max_length=2000)
+
+    @model_validator(mode="after")
+    def require_some_content(self) -> "FavoriteUpsertRequest":
+        if _has_non_empty_text(self.name) or _has_non_empty_text(self.candidate_key) or _has_non_empty_text(self.source_url):
+            return self
+        raise ValueError("Favorite requires a name, candidate_key, or source_url.")
+
+
+class FavoriteResponse(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    id: str
+    session_id: str | None = None
+    candidate_key: str | None = None
+    name: str | None = None
+    source_url: str | None = None
+    recommendation: str | None = None
+    score: dict[str, Any] = Field(default_factory=dict)
+    from_run_id: str | None = None
+    notes: str | None = None
+    created_at: str | None = None
+    updated_at: str | None = None
+
+
+class FavoriteListResponse(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    status: str
+    session_id: str
+    items: list[FavoriteResponse] = Field(default_factory=list)
+
+
 class ImageUploadRequest(BaseModel):
     filename: str | None = None
     media_type: str

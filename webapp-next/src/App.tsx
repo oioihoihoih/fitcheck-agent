@@ -21,7 +21,8 @@ import { ControlsDrawer, type RunControlsForm } from "./components/ControlsDrawe
 import { Markdown } from "./components/Markdown";
 import { HistoryDrawer, useHistory } from "./components/HistoryDrawer";
 import { ClosetPage } from "./components/ClosetPage";
-import type { ClosetItem } from "./api";
+import { FavoritesPage } from "./components/FavoritesPage";
+import { saveFavorite, listFavorites, type ClosetItem } from "./api";
 
 interface Turn {
   id: string;
@@ -59,7 +60,8 @@ export function App() {
   });
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historyRefresh, setHistoryRefresh] = useState(0);
-  const [view, setView] = useState<"chat" | "closet">("chat");
+  const [view, setView] = useState<"chat" | "closet" | "favorites">("chat");
+  const [savedKeys, setSavedKeys] = useState<Set<string>>(new Set());
   const streamRef = useRef<HTMLDivElement>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
   const liveTurnId = useRef<string | null>(null);
@@ -265,6 +267,31 @@ export function App() {
     }
   }
 
+  // docs/25 P1-2: which candidate_keys are already saved (for the ♥ state).
+  useEffect(() => {
+    listFavorites()
+      .then((favs) => setSavedKeys(new Set(favs.map((f) => String(f.candidate_key || "")).filter(Boolean))))
+      .catch(() => undefined);
+  }, []);
+
+  async function saveCandidate(c: MatchResult) {
+    const key = String(c.candidate_key || "");
+    const url = (c as { source_url?: string }).source_url;
+    try {
+      await saveFavorite({
+        candidate_key: key || undefined,
+        name: key ? key.replace(/^live_/, "").replace(/_/g, " ").trim() : undefined,
+        source_url: typeof url === "string" ? url : undefined,
+        recommendation: c.recommendation,
+        score: (c.score as Record<string, number>) || undefined,
+        from_run_id: runId || undefined,
+      });
+      if (key) setSavedKeys((prev) => new Set(prev).add(key));
+    } catch {
+      setBanner({ kind: "error", text: "후보 저장에 실패했습니다." });
+    }
+  }
+
   // docs/25 P1-1: start a search seeded from a closet item — the product's core
   // flow ("find candidates similar to MY clothes").
   function searchFromCloset(item: ClosetItem) {
@@ -332,6 +359,12 @@ export function App() {
             >
               내 옷장
             </button>
+            <button
+              className={`view-tab ${view === "favorites" ? "active" : ""}`}
+              onClick={() => setView("favorites")}
+            >
+              저장함
+            </button>
           </div>
           <span className={`llm-pill ${llmConnected ? "connected" : status ? "error" : ""}`}>
             <span className="dot" />
@@ -351,9 +384,11 @@ export function App() {
 
       {view === "closet" ? (
         <div className="stream">
-          <div className="closet-wrap">
-            <ClosetPage onUseAsBaseline={searchFromCloset} />
-          </div>
+          <ClosetPage onUseAsBaseline={searchFromCloset} />
+        </div>
+      ) : view === "favorites" ? (
+        <div className="stream">
+          <FavoritesPage />
         </div>
       ) : (
       <>
@@ -408,6 +443,8 @@ export function App() {
                     <Candidates
                       candidates={t.candidates}
                       report={{ report_type: t.reportType, grounded: t.grounded }}
+                      onSave={saveCandidate}
+                      savedKeys={savedKeys}
                     />
                   )}
                 </div>

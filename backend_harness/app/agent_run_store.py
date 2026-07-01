@@ -205,15 +205,59 @@ class JsonAgentRunStore:
         return None
 
     def delete_closet_item(self, session_id: str, item_id: str) -> bool:
+        return self._json_delete_item("closet_items", session_id, item_id)
+
+    # --- favorites (docs/25 P1-2), JSON-store parity ---
+    def upsert_favorite(self, session_id: str, item: dict[str, Any]) -> dict[str, Any]:
+        return self._json_upsert_item("favorites", session_id, item, "favori")
+
+    def list_favorites(self, session_id: str) -> list[dict[str, Any]]:
+        items = self._load().get("favorites", [])
+        return [deepcopy(it) for it in items if it.get("session_id") == session_id]
+
+    def get_favorite(self, session_id: str, item_id: str) -> dict[str, Any] | None:
+        for it in self._load().get("favorites", []):
+            if it.get("id") == item_id and it.get("session_id") == session_id:
+                return deepcopy(it)
+        return None
+
+    def delete_favorite(self, session_id: str, item_id: str) -> bool:
+        return self._json_delete_item("favorites", session_id, item_id)
+
+    def _json_upsert_item(
+        self, key: str, session_id: str, item: dict[str, Any], prefix: str
+    ) -> dict[str, Any]:
         data = self._load()
-        items = data.get("closet_items", [])
+        items = data.setdefault(key, [])
+        item_id = item.get("id") or f"{prefix}_{uuid4().hex[:12]}"
+        now = _now()
+        record = {
+            "id": item_id,
+            "session_id": session_id,
+            "created_at": item.get("created_at") or now,
+            "updated_at": now,
+            **item,
+        }
+        for index, existing in enumerate(items):
+            if existing.get("id") == item_id and existing.get("session_id") == session_id:
+                record["created_at"] = existing.get("created_at") or record["created_at"]
+                items[index] = record
+                self._save(data)
+                return deepcopy(record)
+        items.append(record)
+        self._save(data)
+        return deepcopy(record)
+
+    def _json_delete_item(self, key: str, session_id: str, item_id: str) -> bool:
+        data = self._load()
+        items = data.get(key, [])
         kept = [
             it for it in items
             if not (it.get("id") == item_id and it.get("session_id") == session_id)
         ]
         if len(kept) == len(items):
             return False
-        data["closet_items"] = kept
+        data[key] = kept
         self._save(data)
         return True
 
@@ -519,28 +563,96 @@ class SqliteAgentRunStore:
         return deepcopy(record)
 
     def list_closet_items(self, session_id: str) -> list[dict[str, Any]]:
+        return self._list_items("closet_items", session_id)
+
+    def get_closet_item(self, session_id: str, item_id: str) -> dict[str, Any] | None:
+        return self._get_item("closet_items", session_id, item_id)
+
+    def delete_closet_item(self, session_id: str, item_id: str) -> bool:
+        return self._delete_item("closet_items", session_id, item_id)
+
+    # --- favorites (docs/25 P1-2): saved candidates, session-scoped, same shape
+    # as closet items so they reuse the generic item helpers below. ---
+    def upsert_favorite(self, session_id: str, item: dict[str, Any]) -> dict[str, Any]:
+        return self._upsert_item("favorites", session_id, item, "favorite")
+
+    def list_favorites(self, session_id: str) -> list[dict[str, Any]]:
+        return self._list_items("favorites", session_id)
+
+    def get_favorite(self, session_id: str, item_id: str) -> dict[str, Any] | None:
+        return self._get_item("favorites", session_id, item_id)
+
+    def delete_favorite(self, session_id: str, item_id: str) -> bool:
+        return self._delete_item("favorites", session_id, item_id)
+
+    # --- generic session-scoped item table helpers (closet_items, favorites) ---
+    def _upsert_item(
+        self, table: str, session_id: str, item: dict[str, Any], default_status: str
+    ) -> dict[str, Any]:
+        item = deepcopy(item)
+        item_id = item.get("id") or f"{table[:6]}_{uuid4().hex[:12]}"
+        now = _now()
+        record = {
+            "id": item_id,
+            "session_id": session_id,
+            "created_at": item.get("created_at") or now,
+            "updated_at": now,
+            **item,
+        }
+        with closing(self._connect()) as conn:
+            with conn:
+                row = conn.execute(
+                    f"select created_at from {table} where item_id = ? and session_id = ?",
+                    (item_id, session_id),
+                ).fetchone()
+                if row:
+                    record["created_at"] = row[0]
+                record["updated_at"] = now
+                payload = json.dumps(record, ensure_ascii=False)
+                conn.execute(
+                    f"""
+                    insert into {table}
+                      (item_id, session_id, status, created_at, updated_at, payload)
+                    values (?, ?, ?, ?, ?, ?)
+                    on conflict(item_id, session_id) do update set
+                      status = excluded.status,
+                      updated_at = excluded.updated_at,
+                      payload = excluded.payload
+                    """,
+                    (
+                        item_id,
+                        session_id,
+                        record.get("status") or default_status,
+                        record.get("created_at"),
+                        record.get("updated_at"),
+                        payload,
+                    ),
+                )
+        return deepcopy(record)
+
+    def _list_items(self, table: str, session_id: str) -> list[dict[str, Any]]:
         with closing(self._connect()) as conn:
             with conn:
                 rows = conn.execute(
-                    "select payload from closet_items where session_id = ? order by updated_at desc",
+                    f"select payload from {table} where session_id = ? order by updated_at desc",
                     (session_id,),
                 ).fetchall()
         return [json.loads(row[0]) for row in rows]
 
-    def get_closet_item(self, session_id: str, item_id: str) -> dict[str, Any] | None:
+    def _get_item(self, table: str, session_id: str, item_id: str) -> dict[str, Any] | None:
         with closing(self._connect()) as conn:
             with conn:
                 row = conn.execute(
-                    "select payload from closet_items where item_id = ? and session_id = ?",
+                    f"select payload from {table} where item_id = ? and session_id = ?",
                     (item_id, session_id),
                 ).fetchone()
         return json.loads(row[0]) if row else None
 
-    def delete_closet_item(self, session_id: str, item_id: str) -> bool:
+    def _delete_item(self, table: str, session_id: str, item_id: str) -> bool:
         with closing(self._connect()) as conn:
             with conn:
                 cur = conn.execute(
-                    "delete from closet_items where item_id = ? and session_id = ?",
+                    f"delete from {table} where item_id = ? and session_id = ?",
                     (item_id, session_id),
                 )
                 return cur.rowcount > 0
@@ -582,6 +694,22 @@ class SqliteAgentRunStore:
                 )
                 conn.execute("create index if not exists idx_closet_items_session on closet_items(session_id)")
                 conn.execute("create index if not exists idx_closet_items_updated on closet_items(updated_at)")
+                # docs/25 P1-2: saved candidates (favorites), same shape as closet.
+                conn.execute(
+                    """
+                    create table if not exists favorites (
+                      item_id text not null,
+                      session_id text not null,
+                      status text not null,
+                      created_at text not null,
+                      updated_at text not null,
+                      payload text not null,
+                      primary key (item_id, session_id)
+                    )
+                    """
+                )
+                conn.execute("create index if not exists idx_favorites_session on favorites(session_id)")
+                conn.execute("create index if not exists idx_favorites_updated on favorites(updated_at)")
                 conn.execute(
                     """
                     create table if not exists agent_run_events (

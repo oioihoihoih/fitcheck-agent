@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { FinalReport, MatchResult } from "../api";
 
 // Candidate shortlist rendered inline in the conversation (not a side panel),
@@ -6,9 +7,13 @@ import type { FinalReport, MatchResult } from "../api";
 export function Candidates({
   candidates,
   report,
+  onSave,
+  savedKeys,
 }: {
   candidates: MatchResult[];
   report?: FinalReport | null;
+  onSave?: (c: MatchResult) => void;
+  savedKeys?: Set<string>;
 }) {
   if (!candidates.length) return null;
   return (
@@ -45,15 +50,40 @@ export function Candidates({
             {c.missing_fields && c.missing_fields.length > 0 && (
               <div className="missing">부족한 근거: {c.missing_fields.join(", ")}</div>
             )}
-            {url && (
-              <a className="cand-link" href={url} target="_blank" rel="noreferrer">
-                상품 보기 ↗
-              </a>
-            )}
+            <div className="cand-foot">
+              {url && (
+                <a className="cand-link" href={url} target="_blank" rel="noreferrer">
+                  상품 보기 ↗
+                </a>
+              )}
+              {onSave && (
+                <SaveButton
+                  saved={!!(c.candidate_key && savedKeys?.has(c.candidate_key))}
+                  onSave={() => onSave(c)}
+                />
+              )}
+            </div>
           </div>
         );
       })}
     </div>
+  );
+}
+
+function SaveButton({ saved, onSave }: { saved: boolean; onSave: () => void }) {
+  const [justSaved, setJustSaved] = useState(false);
+  const done = saved || justSaved;
+  return (
+    <button
+      className={`cand-save ${done ? "saved" : ""}`}
+      disabled={done}
+      onClick={() => {
+        onSave();
+        setJustSaved(true);
+      }}
+    >
+      {done ? "♥ 저장됨" : "♡ 저장"}
+    </button>
   );
 }
 

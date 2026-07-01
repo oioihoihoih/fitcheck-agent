@@ -228,6 +228,58 @@ export async function deleteClosetItem(id: string): Promise<void> {
   );
 }
 
+// ---- favorites / saved candidates (docs/25 P1-2) ----
+export interface Favorite {
+  id: string;
+  candidate_key?: string;
+  name?: string;
+  source_url?: string;
+  recommendation?: string;
+  score?: Record<string, number>;
+  from_run_id?: string;
+  notes?: string;
+  updated_at?: string;
+  [k: string]: unknown;
+}
+
+export interface FavoriteInput {
+  candidate_key?: string;
+  name?: string;
+  source_url?: string;
+  recommendation?: string;
+  score?: Record<string, number>;
+  from_run_id?: string;
+  notes?: string;
+}
+
+export async function listFavorites(): Promise<Favorite[]> {
+  const res = await jsonOrThrow<{ items: Favorite[] }>(
+    await fetch("/api/favorites", { credentials: "same-origin" }),
+  );
+  return res.items ?? [];
+}
+
+export async function saveFavorite(item: FavoriteInput): Promise<Favorite> {
+  const res = await jsonOrThrow<{ items: Favorite[] }>(
+    await fetch("/api/favorites", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify(item),
+    }),
+  );
+  return res.items[0];
+}
+
+export async function deleteFavorite(id: string): Promise<void> {
+  await jsonOrThrow(
+    await fetch(`/api/favorites/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+      credentials: "same-origin",
+    }),
+  );
+}
+
 export async function replyToRun(
   runId: string,
   message: string,
