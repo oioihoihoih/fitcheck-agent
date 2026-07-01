@@ -141,6 +141,69 @@ def _has_non_empty_text(value: str | None) -> bool:
     return isinstance(value, str) and bool(value.strip())
 
 
+class ClosetItemUpsertRequest(BaseModel):
+    """Create or update a closet (owned/liked) garment. docs/25 P0-3."""
+
+    model_config = ConfigDict(extra="allow")
+
+    id: str | None = None
+    name: str | None = Field(default=None, max_length=200)
+    category: str | None = Field(default=None, max_length=80)
+    brand: str | None = Field(default=None, max_length=120)
+    size: str | None = Field(default=None, max_length=60)
+    colors: list[str] = Field(default_factory=list)
+    material: str | None = Field(default=None, max_length=200)
+    season: str | None = Field(default=None, max_length=60)
+    source_url: str | None = Field(default=None, max_length=MAX_CANDIDATE_URL_CHARS)
+    notes: str | None = Field(default=None, max_length=2000)
+    tags: list[str] = Field(default_factory=list)
+    is_baseline: bool = False
+
+    _check_source_url = field_validator("source_url")(_validate_candidate_url)
+
+    @model_validator(mode="after")
+    def require_some_content(self) -> "ClosetItemUpsertRequest":
+        if (
+            _has_non_empty_text(self.name)
+            or _has_non_empty_text(self.category)
+            or _has_non_empty_text(self.brand)
+            or _has_non_empty_text(self.notes)
+            or bool(self.colors)
+            or bool(self.tags)
+        ):
+            return self
+        raise ValueError("Closet item requires at least a name, category, brand, notes, colors, or tags.")
+
+
+class ClosetItemResponse(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    id: str
+    session_id: str | None = None
+    name: str | None = None
+    category: str | None = None
+    brand: str | None = None
+    size: str | None = None
+    colors: list[str] = Field(default_factory=list)
+    material: str | None = None
+    season: str | None = None
+    source_url: str | None = None
+    notes: str | None = None
+    tags: list[str] = Field(default_factory=list)
+    is_baseline: bool = False
+    status: str | None = None
+    created_at: str | None = None
+    updated_at: str | None = None
+
+
+class ClosetListResponse(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    status: str
+    session_id: str
+    items: list[ClosetItemResponse] = Field(default_factory=list)
+
+
 class ImageUploadRequest(BaseModel):
     filename: str | None = None
     media_type: str

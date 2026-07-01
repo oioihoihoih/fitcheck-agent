@@ -198,6 +198,25 @@ class JsonAgentRunStore:
         items = self._load().get("closet_items", [])
         return [deepcopy(item) for item in items if item.get("session_id") == session_id]
 
+    def get_closet_item(self, session_id: str, item_id: str) -> dict[str, Any] | None:
+        for item in self._load().get("closet_items", []):
+            if item.get("id") == item_id and item.get("session_id") == session_id:
+                return deepcopy(item)
+        return None
+
+    def delete_closet_item(self, session_id: str, item_id: str) -> bool:
+        data = self._load()
+        items = data.get("closet_items", [])
+        kept = [
+            it for it in items
+            if not (it.get("id") == item_id and it.get("session_id") == session_id)
+        ]
+        if len(kept) == len(items):
+            return False
+        data["closet_items"] = kept
+        self._save(data)
+        return True
+
     def _load(self) -> dict[str, Any]:
         if not self.path.exists():
             return {"runs": {}}
@@ -507,6 +526,24 @@ class SqliteAgentRunStore:
                     (session_id,),
                 ).fetchall()
         return [json.loads(row[0]) for row in rows]
+
+    def get_closet_item(self, session_id: str, item_id: str) -> dict[str, Any] | None:
+        with closing(self._connect()) as conn:
+            with conn:
+                row = conn.execute(
+                    "select payload from closet_items where item_id = ? and session_id = ?",
+                    (item_id, session_id),
+                ).fetchone()
+        return json.loads(row[0]) if row else None
+
+    def delete_closet_item(self, session_id: str, item_id: str) -> bool:
+        with closing(self._connect()) as conn:
+            with conn:
+                cur = conn.execute(
+                    "delete from closet_items where item_id = ? and session_id = ?",
+                    (item_id, session_id),
+                )
+                return cur.rowcount > 0
 
     def _connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self.path)

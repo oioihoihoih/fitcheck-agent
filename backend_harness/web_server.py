@@ -14,6 +14,7 @@ if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
 from app.routes.agent import router as agent_router
+from app.routes.closet import router as closet_router
 from app.routes.pages import router as pages_router
 from app.routes.status import router as status_router
 from app.routes.uploads import router as uploads_router
@@ -35,6 +36,7 @@ app.include_router(pages_router)
 app.include_router(status_router)
 app.include_router(uploads_router)
 app.include_router(agent_router)
+app.include_router(closet_router)
 app.include_router(web_candidates_router)
 app.include_router(developer_harness_router, prefix="/api/harness/v1")
 app.include_router(developer_harness_router, prefix="/api/dev-harness")
