@@ -23,7 +23,7 @@ import { HistoryDrawer, useHistory } from "./components/HistoryDrawer";
 import { ClosetPage } from "./components/ClosetPage";
 import { FavoritesPage } from "./components/FavoritesPage";
 import { CitationReceipts } from "./components/CitationReceipts";
-import { saveFavorite, listFavorites, type ClosetItem, type CitationBadge } from "./api";
+import { saveFavorite, listFavorites, uploadImage, type ClosetItem, type CitationBadge, type Attachment } from "./api";
 
 interface Turn {
   id: string;
@@ -65,6 +65,9 @@ export function App() {
   const [historyRefresh, setHistoryRefresh] = useState(0);
   const [view, setView] = useState<"chat" | "closet" | "favorites">("chat");
   const [savedKeys, setSavedKeys] = useState<Set<string>>(new Set());
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
   const streamRef = useRef<HTMLDivElement>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
   const liveTurnId = useRef<string | null>(null);
@@ -219,11 +222,14 @@ export function App() {
 
   async function send() {
     const text = input.trim();
-    if (!text) return;
+    const pending = attachments;
+    // Allow sending with just photos (no text) — a visual-only search.
+    if (!text && pending.length === 0) return;
     setInput("");
     setBanner(null);
 
-    const userTurn: Turn = { id: rid(), role: "user", text };
+    const userText = text || (pending.length ? `📷 사진 ${pending.length}장으로 비슷한 옷 찾기` : "");
+    const userTurn: Turn = { id: rid(), role: "user", text: userText };
     const agentId = rid();
     liveTurnId.current = agentId;
     setTurns((prev) => [
@@ -244,7 +250,9 @@ export function App() {
         const res = await replyToRun(runId, text);
         if (res.run_id) setRunId(res.run_id);
       } else {
-        const body: CreateRunBody = { free_text: text, refresh_web: form.refreshWeb };
+        const body: CreateRunBody = { free_text: text || undefined, refresh_web: form.refreshWeb };
+        if (pending.length) body.attachments = pending;
+        setAttachments([]);
         if (controls) body.controls = controls;
         const res = await createRun(body);
         if (res.status === "configuration_required") {
@@ -295,6 +303,29 @@ export function App() {
     } catch {
       setBanner({ kind: "error", text: "후보 저장에 실패했습니다." });
     }
+  }
+
+  // docs/25 P1-4: upload clothing photos and attach them to the next run, so the
+  // visual-comparison story ("find clothes like THIS photo") is reachable.
+  async function addFiles(files: FileList | File[]) {
+    const imgs = Array.from(files).filter((f) => f.type.startsWith("image/"));
+    if (!imgs.length) return;
+    setUploading(true);
+    try {
+      for (const file of imgs) {
+        try {
+          const att = await uploadImage(file);
+          setAttachments((prev) => [...prev, att]);
+        } catch {
+          setBanner({ kind: "error", text: `이미지 업로드 실패: ${file.name}` });
+        }
+      }
+    } finally {
+      setUploading(false);
+    }
+  }
+  function removeAttachment(id: string) {
+    setAttachments((prev) => prev.filter((a) => a.id !== id));
   }
 
   // docs/25 P1-1: start a search seeded from a closet item — the product's core
@@ -476,12 +507,52 @@ export function App() {
               에이전트 실행 중 · 메시지를 보내면 진행 중 작업에 반영됩니다
             </div>
           )}
-          <div className="input-shell">
+          {attachments.length > 0 && (
+            <div className="attach-row">
+              {attachments.map((a) => (
+                <div className="attach-thumb" key={a.id}>
+                  {a.url ? <img src={a.url} alt={a.filename || "첨부"} /> : <span className="attach-ph">📷</span>}
+                  <button className="attach-remove" onClick={() => removeAttachment(a.id)} aria-label="삭제">
+                    ✕
+                  </button>
+                </div>
+              ))}
+              {uploading && <div className="attach-thumb loading"><span className="spinner" /></div>}
+            </div>
+          )}
+          <div
+            className="input-shell"
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={(e) => {
+              e.preventDefault();
+              if (e.dataTransfer.files.length) addFiles(e.dataTransfer.files);
+            }}
+          >
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*"
+              multiple
+              style={{ display: "none" }}
+              onChange={(e) => {
+                if (e.target.files?.length) addFiles(e.target.files);
+                e.target.value = "";
+              }}
+            />
+            <button className="attach-btn" onClick={() => fileRef.current?.click()} aria-label="사진 첨부" title="옷 사진 첨부">
+              ＋
+            </button>
             <textarea
               ref={taRef}
               rows={1}
               value={input}
-              placeholder={running ? "진행 방향을 바꾸거나 추가 요청을 입력하세요…" : "예: 검은색 와이드 슬랙스랑 비슷한거 찾아줘"}
+              placeholder={
+                attachments.length
+                  ? "사진과 함께 설명을 덧붙이거나 바로 보내세요…"
+                  : running
+                    ? "진행 방향을 바꾸거나 추가 요청을 입력하세요…"
+                    : "예: 검은색 와이드 슬랙스랑 비슷한거 찾아줘 (또는 옷 사진 첨부)"
+              }
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey) {
@@ -495,7 +566,12 @@ export function App() {
                 ■ 취소
               </button>
             )}
-            <button className="send-btn" onClick={send} disabled={!input.trim()} aria-label="보내기">
+            <button
+              className="send-btn"
+              onClick={send}
+              disabled={!input.trim() && attachments.length === 0}
+              aria-label="보내기"
+            >
               {running ? "↺" : "↑"}
             </button>
           </div>

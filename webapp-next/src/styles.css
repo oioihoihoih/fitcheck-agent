@@ -1148,6 +1148,67 @@ button {
     transform: rotate(360deg);
   }
 }
+.attach-row {
+  max-width: var(--col-max);
+  margin: 0 auto 8px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.attach-thumb {
+  position: relative;
+  width: 58px;
+  height: 58px;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-2);
+  display: grid;
+  place-items: center;
+}
+.attach-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.attach-thumb .attach-ph {
+  font-size: 22px;
+}
+.attach-thumb.loading {
+  border-style: dashed;
+}
+.attach-remove {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  font-size: 10px;
+  display: grid;
+  place-items: center;
+  line-height: 1;
+}
+.attach-btn {
+  width: 32px;
+  height: 32px;
+  flex: none;
+  border-radius: 9px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-2);
+  color: var(--text-dim);
+  font-size: 18px;
+  line-height: 1;
+  align-self: flex-end;
+  transition: all 0.15s;
+}
+.attach-btn:hover {
+  border-color: var(--accent-ring);
+  color: var(--accent);
+}
 .input-shell {
   display: flex;
   align-items: flex-end;
