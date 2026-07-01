@@ -82,7 +82,11 @@ export function ClosetPage({ onUseAsBaseline }: { onUseAsBaseline: (item: Closet
       {error && <div className="banner error">{error}</div>}
 
       {loading ? (
-        <div className="closet-empty">불러오는 중…</div>
+        <div className="closet-grid">
+          {[0, 1, 2].map((i) => (
+            <div className="skeleton-card" key={i} />
+          ))}
+        </div>
       ) : items.length === 0 ? (
         <div className="closet-empty">
           <div className="closet-empty-glyph">🧥</div>

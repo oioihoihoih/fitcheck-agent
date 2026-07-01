@@ -33,7 +33,11 @@ export function FavoritesPage() {
         </div>
       </div>
       {loading ? (
-        <div className="closet-empty">불러오는 중…</div>
+        <div className="fav-grid">
+          {[0, 1, 2].map((i) => (
+            <div className="skeleton-card" key={i} />
+          ))}
+        </div>
       ) : items.length === 0 ? (
         <div className="closet-empty">
           <div className="closet-empty-glyph">♡</div>

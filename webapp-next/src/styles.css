@@ -454,6 +454,27 @@ button {
   color: var(--text-dim);
   padding: 60px 20px;
 }
+.skeleton-card {
+  height: 132px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: linear-gradient(
+    100deg,
+    var(--surface) 30%,
+    var(--surface-2) 50%,
+    var(--surface) 70%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.3s ease-in-out infinite;
+}
+@keyframes shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
 .closet-empty-glyph {
   font-size: 44px;
   margin-bottom: 14px;

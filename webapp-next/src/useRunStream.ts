@@ -30,10 +30,45 @@ export function useRunStream(runId: string | null): RunStreamState {
       })
       .catch(() => undefined);
 
+    // docs/25 P1-7: fallback polling. If SSE drops on a still-running run, the UI
+    // would silently freeze; a poll keeps the run state fresh until terminal or
+    // the stream recovers.
+    let pollTimer: ReturnType<typeof setInterval> | null = null;
+    let terminalReached = false;
+    const stopPolling = () => {
+      if (pollTimer) {
+        clearInterval(pollTimer);
+        pollTimer = null;
+      }
+    };
+    const startPolling = () => {
+      if (pollTimer || terminalReached) return;
+      pollTimer = setInterval(async () => {
+        if (cancelled || terminalReached) {
+          stopPolling();
+          return;
+        }
+        try {
+          const full = await getRun(runId);
+          if (cancelled) return;
+          setRun(full);
+          if (isTerminal(full.status)) {
+            terminalReached = true;
+            stopPolling();
+          }
+        } catch {
+          /* keep polling; transient */
+        }
+      }, 2500);
+    };
+
     const source = new EventSource(`/api/agent/runs/${encodeURIComponent(runId)}/events`);
     sourceRef.current = source;
 
-    source.addEventListener("open", () => setConnected(true));
+    source.addEventListener("open", () => {
+      setConnected(true);
+      stopPolling(); // stream is healthy again — polling not needed
+    });
 
     source.addEventListener("agent_delta", (ev) => {
       try {
@@ -51,6 +86,8 @@ export function useRunStream(runId: string | null): RunStreamState {
         };
         setRun((prev) => mergeStateEvent(prev, data));
         if (isTerminal(data.status)) {
+          terminalReached = true;
+          stopPolling();
           // Pull the full run once terminal to get the complete report/trace.
           getRun(runId)
             .then((full) => !cancelled && setRun(full))
@@ -65,10 +102,13 @@ export function useRunStream(runId: string | null): RunStreamState {
 
     source.addEventListener("error", () => {
       setConnected(false);
+      // The stream errored; if the run isn't done, poll so the UI keeps updating.
+      if (!terminalReached) startPolling();
     });
 
     return () => {
       cancelled = true;
+      stopPolling();
       source.close();
       sourceRef.current = null;
     };
