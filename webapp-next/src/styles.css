@@ -1097,6 +1097,53 @@ button {
   background: rgba(232, 139, 134, 0.16);
   color: var(--bad);
 }
+.coverage {
+  margin-top: 10px;
+}
+.coverage-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+.coverage-label {
+  font-size: 11px;
+  color: var(--text-faint);
+}
+.coverage-pct {
+  font-size: 11.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.coverage-pct.high {
+  color: var(--good);
+}
+.coverage-pct.mid {
+  color: var(--warn);
+}
+.coverage-pct.low {
+  color: var(--bad);
+}
+.coverage-bar {
+  height: 5px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+.coverage-fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.3s;
+}
+.coverage-fill.high {
+  background: var(--good);
+}
+.coverage-fill.mid {
+  background: var(--warn);
+}
+.coverage-fill.low {
+  background: var(--bad);
+}
 .scores {
   display: flex;
   gap: 7px;

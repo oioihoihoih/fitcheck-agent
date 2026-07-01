@@ -35,9 +35,10 @@ export function Candidates({
               <span className="rank">{i + 1}</span>
               <span className="cand-name">{prettyKey(c.candidate_key)}</span>
               {c.recommendation && (
-                <span className={`rec ${c.recommendation}`}>{recLabel(c.recommendation)}</span>
+                <span className={`rec ${guardedRec(c)}`}>{recLabel(guardedRec(c))}</span>
               )}
             </div>
+            <CoverageMeter cand={c} />
             {c.score && (
               <div className="scores">
                 <ScorePill label="종합" value={c.score.overall} />
@@ -66,6 +67,63 @@ export function Candidates({
           </div>
         );
       })}
+    </div>
+  );
+}
+
+// docs/25 P1-8: evidence-coverage meter. Coverage = how many of the fields this
+// category needs were actually observed (not the raw model %). Low coverage
+// caps the recommendation so an ungrounded candidate can never read as a strong
+// match — the project's grounding guardrail, made visible.
+interface Coverage {
+  ratio: number; // 0..1
+  observed: number;
+  required: number;
+  missing: string[];
+}
+
+function coverageOf(c: MatchResult): Coverage {
+  const ev = (c as { evidence_coverage?: { required_fields?: string[]; observed_fields?: string[] } })
+    .evidence_coverage;
+  const missing = c.missing_fields ?? [];
+  // Prefer explicit required/observed counts; else derive from missing_fields
+  // against a conventional required set for clothing (measurements/material/price).
+  let required = ev?.required_fields?.length ?? 0;
+  let observed = ev?.observed_fields?.length ?? 0;
+  if (!required) {
+    const CONVENTIONAL = 6; // e.g. 4 measurements + material + price
+    required = Math.max(CONVENTIONAL, missing.length);
+    observed = Math.max(0, required - missing.length);
+  }
+  const ratio = required > 0 ? Math.min(1, observed / required) : missing.length ? 0 : 1;
+  return { ratio, observed, required, missing };
+}
+
+// Block a "strong match" claim when evidence coverage is weak — never present an
+// ungrounded candidate as strongly matching.
+function guardedRec(c: MatchResult): string {
+  const rec = c.recommendation ?? "";
+  const cov = coverageOf(c);
+  const conf = c.score?.confidence ?? 0;
+  if ((rec === "strong_match" || rec === "buy") && (cov.ratio < 0.6 || conf < 40)) {
+    return "need_more_info";
+  }
+  return rec;
+}
+
+function CoverageMeter({ cand }: { cand: MatchResult }) {
+  const cov = coverageOf(cand);
+  const pct = Math.round(cov.ratio * 100);
+  const level = cov.ratio >= 0.75 ? "high" : cov.ratio >= 0.4 ? "mid" : "low";
+  return (
+    <div className="coverage" title={`관찰된 근거 ${cov.observed}/${cov.required} 필드`}>
+      <div className="coverage-head">
+        <span className="coverage-label">근거 커버리지</span>
+        <span className={`coverage-pct ${level}`}>{pct}%</span>
+      </div>
+      <div className="coverage-bar">
+        <div className={`coverage-fill ${level}`} style={{ width: `${pct}%` }} />
+      </div>
     </div>
   );
 }
