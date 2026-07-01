@@ -10,7 +10,15 @@ from time import perf_counter
 from typing import Any, Protocol
 
 from .agent_recipes import agent_skill_catalog, load_agent_skill, match_agent_recipes
-from .agent_run_store import _lease_is_fresh, append_trace, build_agent_run_store
+from datetime import datetime, timezone
+
+from .agent_run_store import (
+    RUN_LEASE_STALE_SECONDS,
+    _lease_is_fresh,
+    _parse_iso,
+    append_trace,
+    build_agent_run_store,
+)
 from .providers import provider_error_metadata_from_result
 from .report_grounding import validate_report_grounding
 from .tool_registry import ToolContext, ToolRegistry, build_fitcheck_tool_registry
@@ -300,6 +308,14 @@ class FitCheckAgentRuntime:
         state = run.get("state") or {}
         if run.get("status") != "running" or _lease_is_fresh(state.get("active_lease")):
             return run
+        if not cancelled:
+            # Don't reap a run that was touched recently — it may be starting up
+            # or between heartbeats on a long LLM call (docs/24 #1 conservative reap).
+            updated = _parse_iso(run.get("updated_at"))
+            if updated is not None:
+                age = (datetime.now(timezone.utc) - updated).total_seconds()
+                if age < RUN_LEASE_STALE_SECONDS:
+                    return run
         state.pop("active_lease", None)
         if cancelled:
             return self._finalize_cancelled_run(run)
@@ -376,6 +392,21 @@ class FitCheckAgentRuntime:
             pending_outputs.append(_user_reply_input_item(payload, run))
             run.setdefault("state", {})["pending_tool_outputs"] = pending_outputs
         state = run.setdefault("state", {})
+        # docs/24 gaps #7/#8/#16: before dropping derived context to force a
+        # re-plan, capture a durable summary of the prior turn (resolved baseline,
+        # the shortlist it produced with prices, and the last search constraints)
+        # so the next turn can resolve context-dependent follow-ups such as
+        # "두번째꺼 자세히" (ordinal) or "더 싼걸로" (comparative price anchor).
+        prior_turn_summary = _capture_prior_turn_summary(run)
+        state["prior_turn_summary"] = prior_turn_summary
+        # docs/24 #8: deterministically resolve an ordinal/positional follow-up
+        # ("두번째꺼", "the second one", "1번") to the concrete prior shortlist item
+        # so the model expands that exact candidate instead of cold re-searching.
+        resolved_ordinal = _resolve_ordinal_reference(payload, prior_turn_summary)
+        if resolved_ordinal:
+            state["resolved_shortlist_reference"] = resolved_ordinal
+        else:
+            state.pop("resolved_shortlist_reference", None)
         state.pop("parsed_liked_item", None)
         for stale_key in [
             "context_snapshot",
@@ -414,7 +445,18 @@ class FitCheckAgentRuntime:
                 output_payload=baseline_rejection,
             )
         if not state.get("unconfirmed_baseline_identity_candidates"):
-            state.pop("closet_item", None)
+            # docs/24 #7: keep a CONFIRMED baseline across turns; only drop an
+            # unconfirmed/web-lookup baseline so a follow-up doesn't forget the
+            # established closet item and regress to "baseline unknown".
+            closet = state.get("closet_item") or {}
+            identity_status = str((closet.get("baseline_identity") or {}).get("status") or "")
+            memory_source = str(closet.get("memory_source") or "")
+            baseline_confirmed = (
+                identity_status == "confirmed"
+                or memory_source in {"closet_memory", "user_confirmed", "confirmed_baseline"}
+            )
+            if not baseline_confirmed:
+                state.pop("closet_item", None)
         state["missing_info"] = []
         run["final_report"] = None
         run["completed_at"] = None
@@ -591,6 +633,39 @@ class FitCheckAgentRuntime:
             # request, so merge the store's inbox into the in-memory run first.
             self._merge_store_steering_inbox(run)
             self._drain_steering_inbox(run)
+
+            # docs/24 #8: a backend-resolved ordinal follow-up must expand the
+            # specific prior candidate, not re-derive the baseline. Pin the model
+            # to that candidate on the first turn after the reply.
+            resolved_ref = run.setdefault("state", {}).get("resolved_shortlist_reference")
+            if (
+                resolved_ref
+                and not run["state"].get("resolved_shortlist_reference_directed")
+                and not _tool_calls_after_latest_user_reply(run)
+            ):
+                candidate_key = resolved_ref.get("candidate_key")
+                run["state"]["resolved_shortlist_reference_directed"] = True
+                run["state"]["pending_tool_outputs"] = [
+                    {
+                        "role": "user",
+                        "content": (
+                            "The user's follow-up refers to a specific prior shortlist item. "
+                            f"The backend resolved it to candidate_key='{candidate_key}' "
+                            f"(rank {resolved_ref.get('rank')}). Do NOT search again and do NOT "
+                            "re-derive the baseline. Directly call score_candidate_match for that "
+                            "candidate_key using the already-observed data (fetch_product_page / "
+                            "extract_size_material_info / normalize_product_spec for that one "
+                            "candidate only if a field is missing), then write_purchase_report."
+                        ),
+                    }
+                ]
+                append_trace(
+                    run,
+                    step_type="guardrail",
+                    name="direct_resolved_shortlist_expansion",
+                    status="running",
+                    output_payload={"candidate_key": candidate_key, "rank": resolved_ref.get("rank")},
+                )
 
             baseline_confirmation_args = _baseline_identity_confirmation_args_from_latest_reply(run)
             if (
@@ -4207,31 +4282,129 @@ def _llm_provider_error_category(provider_code: str) -> str:
     return "provider_error"
 
 
+_ORDINAL_PATTERNS: list[tuple[int, str]] = [
+    (1, r"첫\s*번째|첫번째|첫\s*째|1\s*번|1\s*번째|일\s*번|first|1st|#\s*1|맨\s*처음|처음\s*꺼|처음\s*거"),
+    (2, r"두\s*번째|두번째|둘\s*째|2\s*번|2\s*번째|이\s*번째|second|2nd|#\s*2"),
+    (3, r"세\s*번째|세번째|셋\s*째|3\s*번|3\s*번째|삼\s*번째|third|3rd|#\s*3"),
+    (4, r"네\s*번째|네번째|넷\s*째|4\s*번|4\s*번째|사\s*번째|fourth|4th|#\s*4"),
+    (5, r"다섯\s*번째|5\s*번|5\s*번째|오\s*번째|fifth|5th|#\s*5"),
+]
+
+
+def _resolve_ordinal_reference(
+    payload: dict[str, Any], prior_turn_summary: dict[str, Any]
+) -> dict[str, Any] | None:
+    """Map an ordinal/positional phrase in a reply to a prior shortlist item
+    (docs/24 #8). Returns the resolved item, or None if no clear match."""
+    message = str(payload.get("message") or "")
+    if not message.strip():
+        return None
+    shortlist = (prior_turn_summary or {}).get("shortlist") or []
+    if not shortlist:
+        return None
+    lowered = message.lower()
+    for rank, pattern in _ORDINAL_PATTERNS:
+        if re.search(pattern, lowered):
+            for item in shortlist:
+                if item.get("rank") == rank and item.get("candidate_key"):
+                    return {
+                        "rank": rank,
+                        "candidate_key": item.get("candidate_key"),
+                        "matched_phrase_rank": rank,
+                        "resolution": "backend_ordinal_to_prior_shortlist",
+                    }
+    return None
+
+
+def _capture_prior_turn_summary(run: dict[str, Any]) -> dict[str, Any]:
+    """Compact, durable summary of the turn a reply is following (docs/24 #7/#8/#16).
+
+    Carries the resolved baseline, the ordered shortlist (so ordinals like
+    "두번째꺼" resolve to a concrete item), and observed prices (so a comparative
+    "더 싼걸로" has a numeric anchor). Kept small to bound token/context cost.
+    """
+    state = run.get("state") or {}
+    closet = state.get("closet_item") or {}
+    match_results = state.get("match_results") or []
+    shortlist: list[dict[str, Any]] = []
+    for index, match in enumerate(match_results, start=1):
+        if not isinstance(match, dict):
+            continue
+        score = match.get("score") or {}
+        shortlist.append(
+            {
+                "rank": index,
+                "candidate_key": match.get("candidate_key"),
+                "recommendation": match.get("recommendation"),
+                "overall_score": score.get("overall"),
+                "price_score": score.get("price"),
+            }
+        )
+    final_report = run.get("final_report") or {}
+    return {
+        "captured_from_status": run.get("status"),
+        "baseline_closet_item": {
+            "category": closet.get("category"),
+            "brand": closet.get("brand"),
+            "name": closet.get("name") or closet.get("display_name"),
+            "baseline_identity": (closet.get("baseline_identity") or {}).get("status"),
+        }
+        if closet
+        else None,
+        "shortlist": shortlist,
+        "shortlist_size": len(shortlist),
+        "prior_report_type": final_report.get("report_type"),
+        "prior_llm_final_text": (final_report.get("llm_final_text") or "")[:1500],
+        "prior_search_constraints": state.get("search_constraints") or {},
+    }
+
+
 def _user_reply_input_item(payload: dict[str, Any], run: dict[str, Any]) -> dict[str, Any]:
     matched_recipes = _matched_agent_recipes(run)
+    prior_turn_summary = (run.get("state") or {}).get("prior_turn_summary")
+    content: dict[str, Any] = {
+        "user_reply": payload,
+        "user_replies": [payload],
+        "available_skills": agent_skill_catalog(),
+        "backend_matched_skills": [
+            {
+                "name": recipe.get("skill_name"),
+                "description": recipe.get("when"),
+                "source_path": recipe.get("source_path"),
+            }
+            for recipe in matched_recipes
+        ],
+        "instruction": (
+            "Use this new user reply to choose the next backend tool. "
+            "If a skill description matches, call load_agent_skill before its domain tools. "
+            "If the user asks to search again, use the accumulated raw input and replies as search context."
+        ),
+    }
+    resolved_ref = (run.get("state") or {}).get("resolved_shortlist_reference")
+    if resolved_ref:
+        content["resolved_shortlist_reference"] = resolved_ref
+        content["backend_resolved_ordinal_instruction"] = (
+            f"The backend resolved this reply to prior shortlist rank {resolved_ref.get('rank')} "
+            f"(candidate_key='{resolved_ref.get('candidate_key')}'). Expand THAT exact candidate "
+            "(fetch/extract/normalize/score then report). Do not cold-search or ask which item."
+        )
+    if prior_turn_summary:
+        # docs/24 #7/#8/#16: give the model the prior turn's baseline + ordered
+        # shortlist + prices so context-dependent follow-ups resolve concretely.
+        content["prior_turn_summary"] = prior_turn_summary
+        content["follow_up_resolution_instruction"] = (
+            "This reply may refer to the prior turn. Resolve ordinals/positional "
+            "references (e.g. '두번째꺼', 'the second one', '1번') to the matching "
+            "prior_turn_summary.shortlist item by its rank, and expand THAT exact "
+            "candidate_key instead of starting a new cold search. For comparative "
+            "requests (e.g. '더 싼걸로', 'cheaper'), anchor to the prices shown in "
+            "prior_turn_summary and search for candidates below that anchor. Keep "
+            "the resolved baseline from prior_turn_summary.baseline_closet_item; do "
+            "not discard it or claim the baseline is unknown when it is present here."
+        )
     return {
         "role": "user",
-        "content": json.dumps(
-            {
-                "user_reply": payload,
-                "user_replies": [payload],
-                "available_skills": agent_skill_catalog(),
-                "backend_matched_skills": [
-                    {
-                        "name": recipe.get("skill_name"),
-                        "description": recipe.get("when"),
-                        "source_path": recipe.get("source_path"),
-                    }
-                    for recipe in matched_recipes
-                ],
-                "instruction": (
-                    "Use this new user reply to choose the next backend tool. "
-                    "If a skill description matches, call load_agent_skill before its domain tools. "
-                    "If the user asks to search again, use the accumulated raw input and replies as search context."
-                ),
-            },
-            ensure_ascii=False,
-        ),
+        "content": json.dumps(content, ensure_ascii=False),
     }
 
 
@@ -4266,6 +4439,42 @@ def _initial_model_input(run: dict[str, Any]) -> str:
             "Use write_purchase_report only after score_candidate_match.",
         ],
     }
+    # docs/24 #7/#8/#16: carry the prior turn's baseline + ordered shortlist +
+    # prices so a follow-up reply resolves ordinals/comparatives concretely and
+    # does not lose the established baseline.
+    prior_turn_summary = (run.get("state") or {}).get("prior_turn_summary")
+    if prior_turn_summary:
+        payload["prior_turn_summary"] = prior_turn_summary
+        payload["required_behavior"].append(
+            "This is a follow-up turn: resolve ordinals like '두번째꺼'/'the second one' "
+            "to prior_turn_summary.shortlist by rank and expand that exact candidate_key "
+            "instead of a cold re-search; anchor comparative price requests like '더 싼걸로' "
+            "to prior_turn_summary prices; and keep the resolved baseline_closet_item."
+        )
+    resolved_ref = (run.get("state") or {}).get("resolved_shortlist_reference")
+    if resolved_ref:
+        payload["resolved_shortlist_reference"] = resolved_ref
+        # docs/24 #8: an ordinal follow-up targets a known prior candidate, so
+        # drop the baseline-first enrichment steps for this turn — they send the
+        # model back into cold baseline re-derivation instead of expanding the
+        # resolved item.
+        payload["required_behavior"] = [
+            step
+            for step in payload["required_behavior"]
+            if "enrich_closet_item_from_web" not in step
+            and "load_closet_memory and search_web_candidates before scoring" not in step
+        ]
+        payload["required_behavior"].insert(
+            0,
+            "FOLLOW-UP RESOLUTION (highest priority): the backend already resolved "
+            f"this reply to prior shortlist item rank {resolved_ref.get('rank')} "
+            f"(candidate_key='{resolved_ref.get('candidate_key')}'). Immediately expand "
+            "THAT candidate — score_candidate_match on its candidate_key using the "
+            "already-observed data, then write_purchase_report with that candidate. Do "
+            "NOT start a new search, do NOT re-derive the baseline, and do NOT ask the "
+            "user which item they meant. If a field is missing, fetch_product_page / "
+            "extract_size_material_info / normalize_product_spec for that one candidate only.",
+        )
     return json.dumps(payload, ensure_ascii=False)
 
 

@@ -1392,19 +1392,29 @@ def _get_session_run(run_id: str, session_id: str) -> dict[str, Any] | None:
 def _reap_abandoned_run(run: dict[str, Any]) -> dict[str, Any]:
     """Finalize a 'running' run whose loop died without releasing (docs/24 #1).
 
-    A run stays 'running' only while a live loop holds a fresh lease. If the
-    lease has gone stale, no loop is executing, so the row is abandoned: reap it
-    to 'cancelled' (if the user asked to cancel) or 'failed'. This also gives the
-    system an automatic reaper for orphaned runs instead of permanent zombies.
+    A run stays 'running' only while a live loop holds a fresh lease. Reaping is
+    deliberately conservative to avoid killing a run in its startup window (status
+    is set to 'running' before the background loop acquires its first lease) or
+    between heartbeats during a long LLM call: reap only when the lease is stale
+    AND the row has not been updated for longer than the stale window, i.e. no
+    loop has touched it recently. A user-requested cancel on a lease-stale run is
+    reaped immediately.
     """
-    from ..agent_run_store import _lease_is_fresh
+    from ..agent_run_store import _lease_is_fresh, RUN_LEASE_STALE_SECONDS, _parse_iso
+    from datetime import datetime, timezone
 
     if run.get("status") != "running":
         return run
     state = run.get("state") or {}
     if _lease_is_fresh(state.get("active_lease")):
         return run  # a live loop still owns it
-    runtime = production_agent_runtime()
     cancelled = bool(state.get("cancel_requested"))
+    if not cancelled:
+        updated = _parse_iso(run.get("updated_at"))
+        if updated is not None:
+            age = (datetime.now(timezone.utc) - updated).total_seconds()
+            if age < RUN_LEASE_STALE_SECONDS:
+                return run  # recently touched — still starting up or mid-turn
+    runtime = production_agent_runtime()
     reaped = runtime.reap_abandoned_run(run["run_id"], cancelled=cancelled)
     return reaped or run
