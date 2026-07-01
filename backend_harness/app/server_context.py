@@ -19,6 +19,18 @@ from .schemas import ImageUploadRequest
 ROOT = Path(__file__).resolve().parents[2]
 HARNESS_DIR = ROOT / "backend_harness"
 WEBAPP_DIR = ROOT / "webapp"
+# Modern React/Vite UI build output. Preferred when present; falls back to the
+# legacy vanilla webapp otherwise. See webapp-next/.
+WEBAPP_NEXT_DIST = ROOT / "webapp-next" / "dist"
+
+
+def active_webapp_dir() -> Path:
+    """Serve the modern build if it has been produced, else the legacy webapp."""
+    if (WEBAPP_NEXT_DIST / "index.html").exists():
+        return WEBAPP_NEXT_DIST
+    return WEBAPP_DIR
+
+
 SUBMISSION_DIR = ROOT / "submission"
 OUTPUT_DIR = ROOT / "harness_outputs"
 UPLOAD_DIR = OUTPUT_DIR / "uploads"

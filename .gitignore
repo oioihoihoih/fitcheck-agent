@@ -9,5 +9,8 @@ harness_outputs/test_server*.log
 webapp-next/node_modules/
 webapp-next/.next/
 webapp-next/dist/
+webapp-next/.omc/
+.omc/
 harness_outputs/
 *.pyc
+webapp-next/tsconfig.tsbuildinfo
