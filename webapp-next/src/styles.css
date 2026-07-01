@@ -304,6 +304,232 @@ button {
   color: var(--text);
 }
 
+/* view switch (chat / closet) */
+.view-switch {
+  display: inline-flex;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 3px;
+}
+.view-tab {
+  border: none;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 6px 14px;
+  border-radius: 999px;
+}
+.view-tab.active {
+  background: var(--accent-grad);
+  color: #1a1016;
+}
+
+/* ============ closet page (docs/25 P1-1) ============ */
+.closet-wrap {
+  max-width: 940px;
+  margin: 0 auto;
+  padding: 26px 20px 60px;
+}
+.closet-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 22px;
+}
+.closet-head h2 {
+  margin: 0 0 6px;
+  font-size: 22px;
+  letter-spacing: -0.02em;
+}
+.closet-head p {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 14px;
+  max-width: 520px;
+}
+.btn-accent {
+  border: none;
+  background: var(--accent-grad);
+  color: #1a1016;
+  font-weight: 700;
+  font-size: 14px;
+  padding: 10px 16px;
+  border-radius: var(--radius-sm);
+  white-space: nowrap;
+  transition: transform 0.1s;
+}
+.btn-accent:hover {
+  transform: translateY(-1px);
+}
+.btn-ghost {
+  border: 1px solid var(--border-strong);
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 14px;
+  padding: 10px 16px;
+  border-radius: var(--radius-sm);
+}
+.closet-empty {
+  text-align: center;
+  color: var(--text-dim);
+  padding: 60px 20px;
+}
+.closet-empty-glyph {
+  font-size: 44px;
+  margin-bottom: 14px;
+}
+.closet-empty p {
+  margin: 0 0 18px;
+}
+.closet-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 14px;
+}
+.closet-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.closet-card.baseline {
+  border-color: var(--accent-ring);
+  box-shadow: var(--shadow-glow);
+}
+.closet-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.closet-name {
+  font-size: 15.5px;
+  font-weight: 600;
+}
+.baseline-tag {
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  border: 1px solid var(--accent-ring);
+  flex: none;
+}
+.closet-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.meta-chip {
+  font-size: 11.5px;
+  padding: 3px 9px;
+  border-radius: 7px;
+  background: var(--surface-2);
+  color: var(--text-dim);
+}
+.closet-notes {
+  font-size: 13px;
+  color: var(--text-dim);
+  line-height: 1.5;
+}
+.closet-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 2px;
+}
+.mini-btn {
+  font-size: 12px;
+  padding: 5px 10px;
+  border-radius: 7px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text-dim);
+}
+.mini-btn:hover {
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+.mini-btn.danger {
+  color: var(--bad);
+  border-color: rgba(232, 139, 134, 0.3);
+}
+
+/* closet form (slide-in from right) */
+.closet-form {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 460px;
+  max-width: 92vw;
+  background: var(--surface);
+  border-left: 1px solid var(--border);
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  box-shadow: var(--shadow);
+}
+.closet-form-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.field label {
+  display: block;
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-bottom: 6px;
+}
+.field input,
+.field textarea {
+  width: 100%;
+  padding: 9px 11px;
+  border-radius: 8px;
+  border: 1px solid var(--border-strong);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+  font-family: inherit;
+  resize: vertical;
+}
+.field input:focus,
+.field textarea:focus {
+  outline: none;
+  border-color: var(--accent-ring);
+}
+.closet-form-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 14px 18px;
+  border-top: 1px solid var(--border);
+}
+@media (max-width: 640px) {
+  .form-row {
+    grid-template-columns: 1fr;
+  }
+  .view-tab {
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+}
+
 /* ============ conversation stream ============ */
 .stream {
   flex: 1;

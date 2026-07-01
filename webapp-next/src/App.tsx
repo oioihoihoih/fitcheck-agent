@@ -20,6 +20,8 @@ import { Candidates } from "./components/Candidates";
 import { ControlsDrawer, type RunControlsForm } from "./components/ControlsDrawer";
 import { Markdown } from "./components/Markdown";
 import { HistoryDrawer, useHistory } from "./components/HistoryDrawer";
+import { ClosetPage } from "./components/ClosetPage";
+import type { ClosetItem } from "./api";
 
 interface Turn {
   id: string;
@@ -57,6 +59,7 @@ export function App() {
   });
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historyRefresh, setHistoryRefresh] = useState(0);
+  const [view, setView] = useState<"chat" | "closet">("chat");
   const streamRef = useRef<HTMLDivElement>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
   const liveTurnId = useRef<string | null>(null);
@@ -262,6 +265,19 @@ export function App() {
     }
   }
 
+  // docs/25 P1-1: start a search seeded from a closet item — the product's core
+  // flow ("find candidates similar to MY clothes").
+  function searchFromCloset(item: ClosetItem) {
+    const parts = [item.name, item.category, item.brand, item.material, ...(item.colors ?? [])]
+      .filter(Boolean)
+      .join(" ");
+    const query = `${parts}랑 비슷한 옷 찾아줘`.trim();
+    setView("chat");
+    newSession();
+    setInput(query);
+    setTimeout(() => taRef.current?.focus(), 50);
+  }
+
   function newSession() {
     setRunId(null);
     setTurns([]);
@@ -303,6 +319,20 @@ export function App() {
           </div>
         </div>
         <div className="topbar-right">
+          <div className="view-switch">
+            <button
+              className={`view-tab ${view === "chat" ? "active" : ""}`}
+              onClick={() => setView("chat")}
+            >
+              탐색
+            </button>
+            <button
+              className={`view-tab ${view === "closet" ? "active" : ""}`}
+              onClick={() => setView("closet")}
+            >
+              내 옷장
+            </button>
+          </div>
           <span className={`llm-pill ${llmConnected ? "connected" : status ? "error" : ""}`}>
             <span className="dot" />
             {llmConnected
@@ -311,7 +341,7 @@ export function App() {
                 ? "LLM 미설정"
                 : "연결 확인 중"}
           </span>
-          {turns.length > 0 && (
+          {view === "chat" && turns.length > 0 && (
             <button className="icon-btn" onClick={newSession}>
               새 대화
             </button>
@@ -319,6 +349,14 @@ export function App() {
         </div>
       </div>
 
+      {view === "closet" ? (
+        <div className="stream">
+          <div className="closet-wrap">
+            <ClosetPage onUseAsBaseline={searchFromCloset} />
+          </div>
+        </div>
+      ) : (
+      <>
       <div className="stream" ref={streamRef}>
         <div className="stream-inner">
           {turns.length === 0 ? (
@@ -420,6 +458,8 @@ export function App() {
           </div>
         </div>
       </div>
+      </>
+      )}
     </div>
   );
 }

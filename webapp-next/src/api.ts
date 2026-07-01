@@ -156,6 +156,78 @@ export async function listRuns(): Promise<{ runs: AgentRun[] }> {
   return jsonOrThrow(await fetch("/api/agent/runs", { credentials: "same-origin" }));
 }
 
+// ---- closet (docs/25 P0-3 API / P1-1 UI) ----
+export interface ClosetItem {
+  id: string;
+  name?: string;
+  category?: string;
+  brand?: string;
+  size?: string;
+  colors?: string[];
+  material?: string;
+  season?: string;
+  source_url?: string;
+  notes?: string;
+  tags?: string[];
+  is_baseline?: boolean;
+  updated_at?: string;
+  [k: string]: unknown;
+}
+
+export interface ClosetItemInput {
+  name?: string;
+  category?: string;
+  brand?: string;
+  size?: string;
+  colors?: string[];
+  material?: string;
+  season?: string;
+  source_url?: string;
+  notes?: string;
+  tags?: string[];
+  is_baseline?: boolean;
+}
+
+export async function listCloset(): Promise<ClosetItem[]> {
+  const res = await jsonOrThrow<{ items: ClosetItem[] }>(
+    await fetch("/api/closet", { credentials: "same-origin" }),
+  );
+  return res.items ?? [];
+}
+
+export async function createClosetItem(item: ClosetItemInput): Promise<ClosetItem> {
+  const res = await jsonOrThrow<{ items: ClosetItem[] }>(
+    await fetch("/api/closet", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify(item),
+    }),
+  );
+  return res.items[0];
+}
+
+export async function updateClosetItem(id: string, item: ClosetItemInput): Promise<ClosetItem> {
+  const res = await jsonOrThrow<{ items: ClosetItem[] }>(
+    await fetch(`/api/closet/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify(item),
+    }),
+  );
+  return res.items[0];
+}
+
+export async function deleteClosetItem(id: string): Promise<void> {
+  await jsonOrThrow(
+    await fetch(`/api/closet/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+      credentials: "same-origin",
+    }),
+  );
+}
+
 export async function replyToRun(
   runId: string,
   message: string,
