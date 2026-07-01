@@ -15,6 +15,7 @@ export function Candidates({
   onSave?: (c: MatchResult) => void;
   savedKeys?: Set<string>;
 }) {
+  const [mode, setMode] = useState<"cards" | "table">("cards");
   if (!candidates.length) return null;
   return (
     <div className="cands">
@@ -26,8 +27,29 @@ export function Candidates({
             {report.grounded ? " · 근거 검증됨" : ""}
           </span>
         )}
+        {candidates.length > 1 && (
+          <span className="cands-viewswitch">
+            <button
+              className={`cvs-btn ${mode === "cards" ? "active" : ""}`}
+              onClick={() => setMode("cards")}
+              aria-pressed={mode === "cards"}
+            >
+              카드
+            </button>
+            <button
+              className={`cvs-btn ${mode === "table" ? "active" : ""}`}
+              onClick={() => setMode("table")}
+              aria-pressed={mode === "table"}
+            >
+              표 비교
+            </button>
+          </span>
+        )}
       </div>
-      {candidates.map((c, i) => {
+      {mode === "table" ? (
+        <ComparisonTable candidates={candidates} />
+      ) : (
+      candidates.map((c, i) => {
         const url = candidateUrl(c);
         return (
           <div className="cand" key={c.candidate_key ?? i}>
@@ -66,7 +88,73 @@ export function Candidates({
             </div>
           </div>
         );
-      })}
+      })
+      )}
+    </div>
+  );
+}
+
+// docs/25 P1-9: attribute-grouped comparison table across the shortlist. Rows are
+// the score axes that actually exist on every candidate; the best value per row
+// is highlighted so the user scans differences at a glance (Baymard pattern).
+function ComparisonTable({ candidates }: { candidates: MatchResult[] }) {
+  const cands = candidates.slice(0, 5); // keep it scannable
+  const axes: Array<{ key: keyof NonNullable<MatchResult["score"]>; label: string }> = [
+    { key: "overall", label: "종합" },
+    { key: "size", label: "사이즈" },
+    { key: "material", label: "소재" },
+    { key: "price", label: "가격" },
+    { key: "confidence", label: "신뢰도" },
+  ];
+  const bestFor = (key: string): number => {
+    let best = -Infinity;
+    for (const c of cands) {
+      const v = (c.score as Record<string, number> | undefined)?.[key];
+      if (typeof v === "number" && v > best) best = v;
+    }
+    return best;
+  };
+  return (
+    <div className="cmp-scroll">
+      <table className="cmp-table">
+        <thead>
+          <tr>
+            <th className="cmp-axis" />
+            {cands.map((c, i) => (
+              <th key={c.candidate_key ?? i} title={prettyKey(c.candidate_key)}>
+                <span className="cmp-rank">{i + 1}</span>
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {axes.map((a) => {
+            const best = bestFor(a.key as string);
+            return (
+              <tr key={a.key as string}>
+                <td className="cmp-axis">{a.label}</td>
+                {cands.map((c, i) => {
+                  const v = (c.score as Record<string, number> | undefined)?.[a.key as string];
+                  const isBest = typeof v === "number" && v === best && cands.length > 1;
+                  return (
+                    <td key={i} className={isBest ? "cmp-best" : ""}>
+                      {typeof v === "number" ? v : "—"}
+                    </td>
+                  );
+                })}
+              </tr>
+            );
+          })}
+          <tr>
+            <td className="cmp-axis">추천</td>
+            {cands.map((c, i) => (
+              <td key={i} className="cmp-rec">
+                {c.recommendation ? recLabel(guardedRec(c)) : "—"}
+              </td>
+            ))}
+          </tr>
+        </tbody>
+      </table>
     </div>
   );
 }
