@@ -1,0 +1,20 @@
+{
+  "candidate_key": "candidate_missing_info",
+  "category": "t_shirt",
+  "brand": "샘플브랜드",
+  "name": "그래픽 반팔 티셔츠 차콜",
+  "price": 42000,
+  "target_size_label": "L",
+  "fit_keywords": ["graphic tee"],
+  "assets": [
+    {
+      "name": "상품 단독 이미지",
+      "asset_type_hint": "product_image"
+    },
+    {
+      "name": "모델 착장 이미지",
+      "asset_type_hint": "outfit_image"
+    }
+  ]
+}
+

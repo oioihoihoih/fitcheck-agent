@@ -1,0 +1,4 @@
+interface:
+  display_name: "Agentic Harness Loop"
+  short_description: "Probe, record, evaluate harness loops"
+  default_prompt: "Use $agentic-harness-loop to implement an evidence-backed agentic harness loop."

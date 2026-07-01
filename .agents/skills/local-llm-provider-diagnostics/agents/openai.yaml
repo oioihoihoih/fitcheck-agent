@@ -1,0 +1,4 @@
+interface:
+  display_name: "Local LLM Provider Diagnostics"
+  short_description: "Probe and label local LLM providers"
+  default_prompt: "Use -llm-provider-diagnostics to verify local LLM provider configuration before claiming connectivity."

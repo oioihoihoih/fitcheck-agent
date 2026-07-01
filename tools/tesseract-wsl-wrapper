@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+TESSERACT_EXE="/mnt/c/Program Files/Tesseract-OCR/tesseract.exe"
+TESSDATA_DIR="C:\\com2us\\tools\\tessdata"
+TMP_DIR="/mnt/c/com2us/harness_outputs/tesseract_tmp"
+
+if [[ ! -x "$TESSERACT_EXE" ]]; then
+  echo "Tesseract executable not found: $TESSERACT_EXE" >&2
+  exit 127
+fi
+
+tmp_files=()
+cleanup() {
+  for tmp_file in "${tmp_files[@]}"; do
+    rm -f "$tmp_file"
+  done
+}
+trap cleanup EXIT
+
+wsl_file_arg_to_windows() {
+  local source_path="$1"
+  if [[ "$source_path" == /mnt/[a-zA-Z]/* ]]; then
+    wslpath -w "$source_path"
+    return
+  fi
+
+  mkdir -p "$TMP_DIR"
+  local extension="${source_path##*.}"
+  if [[ "$extension" == "$source_path" || ${#extension} -gt 8 ]]; then
+    extension="tmp"
+  fi
+  local copied_path
+  copied_path="$(mktemp "$TMP_DIR/input_XXXXXX.$extension")"
+  cp "$source_path" "$copied_path"
+  tmp_files+=("$copied_path")
+  wslpath -w "$copied_path"
+}
+
+args=()
+for arg in "$@"; do
+  if [[ "$arg" == /* && -e "$arg" ]] && command -v wslpath >/dev/null 2>&1; then
+    args+=("$(wsl_file_arg_to_windows "$arg")")
+  else
+    args+=("$arg")
+  fi
+done
+
+exec "$TESSERACT_EXE" --tessdata-dir "$TESSDATA_DIR" "${args[@]}"

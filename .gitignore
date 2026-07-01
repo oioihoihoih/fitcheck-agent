@@ -1,0 +1,13 @@
+.venv/
+node_modules/
+__pycache__/
+*.pyc
+harness_outputs/*.sqlite3
+harness_outputs/*.log
+harness_outputs/test_server*.log
+.env
+webapp-next/node_modules/
+webapp-next/.next/
+webapp-next/dist/
+harness_outputs/
+*.pyc

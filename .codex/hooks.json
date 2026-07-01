@@ -1,0 +1,70 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python .codex/hooks/record_event.py",
+            "commandWindows": "python .codex/hooks/record_event.py",
+            "timeout": 10,
+            "statusMessage": "Recording harness session"
+          }
+        ]
+      }
+    ],
+    "SubagentStart": [
+      {
+        "matcher": "harness-.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python .codex/hooks/record_event.py",
+            "commandWindows": "python .codex/hooks/record_event.py",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "matcher": "harness-.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python .codex/hooks/record_event.py",
+            "commandWindows": "python .codex/hooks/record_event.py",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python .codex/hooks/record_event.py",
+            "commandWindows": "python .codex/hooks/record_event.py",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "python .codex/hooks/agentic_evidence_hint.py",
+            "commandWindows": "python .codex/hooks/agentic_evidence_hint.py",
+            "timeout": 10,
+            "statusMessage": "Recording agentic harness evidence checklist"
+          },
+          {
+            "type": "command",
+            "command": "python .codex/hooks/provider_claim_scan.py",
+            "commandWindows": "python .codex/hooks/provider_claim_scan.py",
+            "timeout": 10,
+            "statusMessage": "Scanning provider connectivity claims"
+          }
+        ]
+      }
+    ]
+  }
+}

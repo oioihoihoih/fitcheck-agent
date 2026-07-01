@@ -1,0 +1,34 @@
+{
+  "candidate_key": "candidate_fit_good",
+  "category": "t_shirt",
+  "brand": "샘플브랜드",
+  "name": "피그먼트 오버핏 포켓 반팔 티셔츠 차콜",
+  "price": 38900,
+  "target_size_label": "L",
+  "fit_keywords": ["relaxed fit", "pigment dyed"],
+  "assets": [
+    {
+      "name": "상품 단독 이미지",
+      "asset_type_hint": "product_image"
+    },
+    {
+      "name": "사이즈표 이미지",
+      "asset_type_hint": "size_chart",
+      "ocr_text": "L 총장 75 어깨너비 56 가슴단면 62 소매길이 25",
+      "ocr_confidence": 0.92
+    },
+    {
+      "name": "소재표 이미지",
+      "asset_type_hint": "material_chart",
+      "ocr_text": "소재 면 100%",
+      "ocr_confidence": 0.88
+    },
+    {
+      "name": "리뷰 요약 영역",
+      "asset_type_hint": "review_text",
+      "ocr_text": "정사이즈 탄탄 색감 좋음",
+      "ocr_confidence": 0.84
+    }
+  ]
+}
+

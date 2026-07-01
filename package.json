@@ -1,0 +1,24 @@
+{
+  "name": "com2us",
+  "version": "1.0.0",
+  "description": "`FitCheck Agent`는 사용자가 평소 만족하며 입는 옷의 핏, 재질, 사이즈, 실루엣, 디자인 요소를 기준으로 온라인에서 비슷한 의류 후보를 찾아 비교하는 AI Agent 설계/구현 프로젝트입니다.",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "claude": "claude",
+    "verify:frontend": "node backend_harness/verify_frontend_ui_smoke.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "jsdom": "^29.1.1",
+    "playwright": "^1.60.0"
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-code": "^2.1.168"
+  }
+}

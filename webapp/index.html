@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>FitCheck Agent Chat</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/static/styles.css?v=23" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="Agent state">
+        <div class="brand-block">
+          <span class="brand-mark">F</span>
+          <div>
+            <strong>FitCheck Agent</strong>
+            <span>취향 기반 유사 의류 탐색 AI</span>
+          </div>
+        </div>
+
+        <section class="side-section">
+          <div class="section-title">
+            <span>Runtime</span>
+            <strong id="agentStatus">checking</strong>
+          </div>
+          <dl class="runtime-list">
+            <div>
+              <dt>LLM</dt>
+              <dd id="llmState">-</dd>
+            </div>
+            <div>
+              <dt>Model</dt>
+              <dd id="modelState">-</dd>
+            </div>
+            <div>
+              <dt>API</dt>
+              <dd id="apiStyleState">-</dd>
+            </div>
+            <div>
+              <dt>Tools</dt>
+              <dd id="toolState">-</dd>
+            </div>
+            <div>
+              <dt>Search</dt>
+              <dd id="searchProviderState">-</dd>
+            </div>
+            <div>
+              <dt>OCR</dt>
+              <dd id="ocrProviderState">-</dd>
+            </div>
+            <div>
+              <dt>Fetch</dt>
+              <dd id="pageFetchProviderState">-</dd>
+            </div>
+            <div>
+              <dt>Run</dt>
+              <dd id="runIdState">-</dd>
+            </div>
+          </dl>
+        </section>
+
+        <section class="side-section">
+          <div class="section-title">
+            <span>Stream</span>
+            <strong id="streamStatus">idle</strong>
+          </div>
+          <dl class="runtime-list">
+            <div>
+              <dt>Cursor</dt>
+              <dd id="streamCursorState">-</dd>
+            </div>
+            <div>
+              <dt>Seq</dt>
+              <dd id="streamSequenceState">-</dd>
+            </div>
+          </dl>
+        </section>
+
+        <section class="side-section">
+          <div class="section-title">
+            <span>Plan</span>
+            <strong id="planStatus">-</strong>
+          </div>
+          <ol id="planList" class="agent-plan-list"></ol>
+        </section>
+
+        <section class="side-section">
+          <div class="section-title">
+            <span>Tool Flow</span>
+            <strong id="toolFlowCount">0</strong>
+          </div>
+          <ol id="toolFlowList" class="tool-flow-list"></ol>
+        </section>
+
+        <section class="side-section">
+          <div class="section-title">
+            <span>Run Evidence</span>
+            <strong id="evidenceStatus">-</strong>
+          </div>
+          <div id="evidenceSummary" class="evidence-summary"></div>
+          <ol id="evidenceList" class="evidence-list"></ol>
+        </section>
+
+        <section class="side-section">
+          <div class="section-title">
+            <span>Trace</span>
+            <strong id="traceCount">0</strong>
+          </div>
+          <ol id="traceList" class="trace-list"></ol>
+        </section>
+
+        <section class="side-section">
+          <div class="section-title">
+            <span>Latest Tool</span>
+            <strong id="observationStatus">-</strong>
+          </div>
+          <div id="observationPanel" class="observation-panel empty-line">아직 tool observation이 없습니다.</div>
+        </section>
+
+        <section class="side-section">
+          <div class="section-title">
+            <span>Missing Info</span>
+            <strong id="questionCount">0</strong>
+          </div>
+          <div id="questionList" class="question-list"></div>
+        </section>
+      </aside>
+
+      <main class="chat-main">
+        <header class="chat-header">
+          <div>
+            <p class="eyebrow">AI Agent Chat</p>
+            <h1>마음에 드는 옷을 기준으로 비슷한 옷을 찾아보세요</h1>
+          </div>
+          <div class="header-actions">
+            <a class="icon-button text-button" href="/presentation" target="_blank" rel="noreferrer">발표자료</a>
+            <button id="newChatButton" class="icon-button" type="button" aria-label="새 대화">+</button>
+          </div>
+        </header>
+
+        <section id="messages" class="messages" aria-live="polite"></section>
+
+        <form id="chatForm" class="composer">
+          <div id="attachmentTray" class="attachment-tray" hidden></div>
+          <button id="attachButton" class="attach-button" type="button" aria-label="사진 추가">+</button>
+          <input
+            id="imageInput"
+            class="sr-only"
+            type="file"
+            accept="image/*"
+            capture="environment"
+            multiple
+          />
+          <label class="sr-only" for="chatInput">메시지</label>
+          <textarea
+            id="chatInput"
+            rows="1"
+            placeholder="예: 무탠다드 청바지 L 사이즈와 비슷한 바지를 찾아줘"
+          ></textarea>
+          <button id="sendButton" class="send-button" type="submit" aria-label="보내기">보내기</button>
+        </form>
+      </main>
+    </div>
+
+    <script src="/static/app.js?v=23"></script>
+  </body>
+</html>

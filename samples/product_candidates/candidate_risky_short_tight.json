@@ -1,0 +1,34 @@
+{
+  "candidate_key": "candidate_risky_short_tight",
+  "category": "t_shirt",
+  "brand": "샘플브랜드",
+  "name": "슬림 워싱 반팔 티셔츠 차콜",
+  "price": 29900,
+  "target_size_label": "L",
+  "fit_keywords": ["slim fit"],
+  "assets": [
+    {
+      "name": "모델 착장 이미지",
+      "asset_type_hint": "outfit_image"
+    },
+    {
+      "name": "사이즈표 이미지",
+      "asset_type_hint": "size_chart",
+      "ocr_text": "L 총장 68 어깨너비 51 가슴단면 55 소매길이 22",
+      "ocr_confidence": 0.9
+    },
+    {
+      "name": "소재표 이미지",
+      "asset_type_hint": "material_chart",
+      "ocr_text": "소재 폴리에스터 65% 면 35%",
+      "ocr_confidence": 0.83
+    },
+    {
+      "name": "리뷰 요약 영역",
+      "asset_type_hint": "review_text",
+      "ocr_text": "작아요 짧아요 얇아요",
+      "ocr_confidence": 0.81
+    }
+  ]
+}
+
