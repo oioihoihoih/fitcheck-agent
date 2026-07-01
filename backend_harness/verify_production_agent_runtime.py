@@ -6433,7 +6433,14 @@ def _assert_reply_requires_new_report_after_latest_user_input() -> None:
             "FINAL_REPORT_TOOL_REQUIRED",
             "reply stale report guardrail code",
         )
-        _assert_equal(replied.get("final_report"), None, "reply should clear old final_report")
+        # docs/25 P0-2: the stale grounded report from turn 1 must not linger. The
+        # failure MAY attach a fresh degraded partial_answer (the reply's own model
+        # text) so the UI isn't a dead end — but never the previous completed report.
+        replied_report = replied.get("final_report")
+        if replied_report is not None:
+            _assert_equal(replied_report.get("degraded"), True, "reply stale report is fresh degraded partial")
+            _assert_equal(replied_report.get("report_type"), "partial_answer", "reply degraded report type")
+            _assert_equal(replied_report.get("grounded"), False, "reply degraded report not grounded")
         _assert_equal(replied.get("completed_at"), None, "reply should clear old completed_at")
         reply_steps = [
             step for step in replied["trace"] if step["step_type"] == "user_reply"

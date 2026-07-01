@@ -144,6 +144,58 @@ def _cancel_requested(run: dict[str, Any]) -> bool:
     return bool(flag)
 
 
+# docs/25 P0-2: user-facing Korean messages for terminal error codes, so the UI
+# shows a friendly line instead of a raw code. The raw code stays in error.code.
+_ERROR_USER_MESSAGES: dict[str, str] = {
+    "FINAL_REPORT_TOOL_REQUIRED": "후보를 찾았지만 최종 리포트를 확정하지 못했습니다. 아래는 확정 전 잠정 답변입니다.",
+    "FINAL_REPORT_TOOL_NOT_GROUNDED": "찾은 내용이 근거 기준을 완전히 충족하지 못해 잠정 답변으로만 보여드립니다.",
+    "MAX_AGENT_TURNS_EXCEEDED": "탐색이 설정된 단계 한도에 도달했습니다. 지금까지의 잠정 결과입니다.",
+    "REPEATED_BACKEND_GUIDANCE_RECOVERY": "탐색이 같은 지점에서 반복되어 중단했습니다. 지금까지의 잠정 결과입니다.",
+    "LLM_RESPONSE_FAILED": "모델 응답 중 일시적 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.",
+    "LLM_CONFIGURATION_REQUIRED": "LLM 설정이 필요합니다. 서버의 OPENAI_API_KEY/FITCHECK_LLM_* 구성을 확인하세요.",
+    "TOOL_BUDGET_EXCEEDED": "설정한 도구 호출 예산에 도달해 탐색을 멈췄습니다.",
+    "RUN_ABANDONED": "실행이 예기치 않게 중단되었습니다. 다시 시도해 주세요.",
+}
+
+
+def _user_error_message(code: str | None) -> str:
+    if code and code in _ERROR_USER_MESSAGES:
+        return _ERROR_USER_MESSAGES[code]
+    return "요청을 완료하지 못했습니다. 다시 시도하거나 다른 표현으로 요청해 주세요."
+
+
+def _latest_model_text_from_trace(run: dict[str, Any]) -> str | None:
+    """Recover the most recent model output text from persisted trace entries,
+    for failure paths where the local `final_text` variable is out of scope."""
+    for step in reversed(run.get("trace") or []):
+        out = step.get("output") or {}
+        txt = out.get("llm_final_text")
+        if isinstance(txt, str) and txt.strip():
+            return txt
+    return None
+
+
+def _attach_partial_answer_on_failure(
+    run: dict[str, Any], error: dict[str, Any], final_text: str | None
+) -> None:
+    """Preserve a model answer that a terminal-failure path would otherwise drop
+    (docs/25 P0-2). The answer is labeled degraded/ungrounded so the UI can show
+    it as a provisional (not verified) result, and a Korean user_message is added
+    to the error while the raw code stays intact."""
+    code = error.get("code")
+    error.setdefault("user_message", _user_error_message(code))
+    text = (final_text or "").strip()
+    if text and not run.get("final_report"):
+        run["final_report"] = {
+            "summary": text,
+            "llm_final_text": text,
+            "grounded": False,
+            "degraded": True,
+            "report_type": "partial_answer",
+            "degraded_reason": code,
+        }
+
+
 def _client_supports_delta_callback(client: Any) -> bool:
     """Whether the LLM client's create_response accepts a delta_callback kwarg.
 
@@ -1056,6 +1108,9 @@ class FitCheckAgentRuntime:
                     return self.store.update_run(run)
                 run["status"] = "failed"
                 run["error"] = error_payload
+                _attach_partial_answer_on_failure(
+                    run, error_payload, _latest_model_text_from_trace(run)
+                )
                 append_trace(
                     run,
                     step_type="guardrail",
@@ -1326,6 +1381,7 @@ class FitCheckAgentRuntime:
                             "did not complete after the latest user input."
                         ),
                     }
+                    _attach_partial_answer_on_failure(run, run["error"], final_text)
                     append_trace(
                         run,
                         step_type="guardrail",
@@ -1376,6 +1432,7 @@ class FitCheckAgentRuntime:
                         "message": "Agent final text was rejected because the latest write_purchase_report result was not grounded.",
                         "write_purchase_report": _summarize_tool_output(report_result),
                     }
+                    _attach_partial_answer_on_failure(run, run["error"], final_text)
                     append_trace(
                         run,
                         step_type="guardrail",
@@ -2466,6 +2523,9 @@ class FitCheckAgentRuntime:
             "message": f"Exceeded max_turns={self.max_turns}",
             "max_turns": self.max_turns,
         }
+        _attach_partial_answer_on_failure(
+            run, run["error"], _latest_model_text_from_trace(run)
+        )
         run.setdefault("state", {})["pending_tool_outputs"] = []
         append_trace(
             run,

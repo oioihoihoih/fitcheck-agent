@@ -847,6 +847,12 @@ def _final_output_sdk_event_for_run(run: dict[str, Any], base: dict[str, Any]) -
     summary = str((final_report or {}).get("summary") or "").strip()
     if not final_report and not summary:
         return None
+    # docs/25 P0-2: a degraded partial answer (attached on a failure path so the
+    # UI can still show the model's text) is NOT a genuine final output — the
+    # sdk-events "final_output" contract means a real report was produced. The UI
+    # reads run.final_report directly, so it still sees the partial answer.
+    if (final_report or {}).get("degraded") is True:
+        return None
     grounding = (final_report or {}).get("grounding_validation")
     citation_badges = list((grounding or {}).get("citation_badges") or [])
     return {
