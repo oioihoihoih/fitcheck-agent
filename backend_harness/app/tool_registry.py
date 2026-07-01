@@ -5410,13 +5410,27 @@ def _confirmed_durable_closet_items(context: ToolContext) -> list[dict[str, Any]
         items = store.list_closet_items(session_id)
     except Exception:
         return []
-    return [
-        item
-        for item in items
-        if isinstance(item, dict)
-        and str(item.get("status") or "").lower() in {"confirmed", "memory_identity_available", ""}
-        and (item.get("baseline_identity") or {}).get("status") == "memory_identity_available"
-    ]
+    return [item for item in items if isinstance(item, dict) and _is_durable_closet_item(item)]
+
+
+def _is_durable_closet_item(item: dict[str, Any]) -> bool:
+    """Whether a stored closet item counts as a durable baseline the agent can
+    load. Accepts both the legacy web-lookup-confirmed identity shape AND
+    user-added items from the closet management UI (docs/25 P1-10), which are
+    plain records (is_baseline / name+category) without a baseline_identity."""
+    status = str(item.get("status") or "").lower()
+    if status not in {"confirmed", "memory_identity_available", ""}:
+        return False
+    # Legacy: web-lookup baseline confirmed via identity resolution.
+    if (item.get("baseline_identity") or {}).get("status") == "memory_identity_available":
+        return True
+    # UI-added: an explicit baseline flag, or enough content to be a real garment.
+    if item.get("is_baseline") is True:
+        return True
+    has_content = bool(
+        str(item.get("name") or "").strip() or str(item.get("category") or "").strip()
+    )
+    return has_content
 
 
 def _select_durable_closet_match(
