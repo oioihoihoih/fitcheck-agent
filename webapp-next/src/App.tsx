@@ -29,6 +29,8 @@ interface Turn {
   candidates?: MatchResult[];
   reportType?: string;
   grounded?: boolean;
+  degraded?: boolean; // partial/provisional answer from a failure path (docs/25 P0-2)
+  waiting?: boolean; // waiting_for_user — this turn asks a question (docs/25 P0-1)
   live?: boolean; // the currently-running agent turn
 }
 
@@ -87,6 +89,7 @@ export function App() {
     if (!run || !isTerminal(run.status) || !liveTurnId.current) return;
     const id = liveTurnId.current;
     const finalText = finalAgentText(run);
+    const isWaiting = run.status === "waiting_for_user";
     setTurns((prev) =>
       prev.map((t) =>
         t.id === id
@@ -95,6 +98,8 @@ export function App() {
               text: finalText || t.text,
               streaming: false,
               live: false,
+              waiting: isWaiting,
+              degraded: run.final_report?.degraded === true,
               trace: run.trace ?? t.trace,
               candidates: run.state?.match_results ?? t.candidates,
               reportType: run.final_report?.report_type,
@@ -104,11 +109,17 @@ export function App() {
       ),
     );
     liveTurnId.current = null;
-    if (run.status === "cancelled") setBanner({ kind: "info", text: "실행을 취소했습니다." });
-    else if (run.status === "failed" && run.error?.code)
-      setBanner({ kind: "warn", text: `종료 코드: ${run.error.code}` });
+    // A waiting_for_user run is answerable, not dead — keep the same runId so the
+    // composer's next message continues it (docs/25 P0-1).
+    if (isWaiting) setBanner({ kind: "info", text: "답변을 입력하면 이 탐색을 이어갑니다." });
+    else if (run.status === "cancelled") setBanner({ kind: "info", text: "실행을 취소했습니다." });
+    else if (run.status === "failed")
+      setBanner({
+        kind: run.final_report?.degraded ? "warn" : "warn",
+        text: run.error?.user_message ?? "요청을 완료하지 못했습니다. 다시 시도해 주세요.",
+      });
     else if (run.status === "configuration_required")
-      setBanner({ kind: "error", text: "LLM 설정이 필요합니다. 서버 구성을 확인하세요." });
+      setBanner({ kind: "error", text: run.error?.user_message ?? "LLM 설정이 필요합니다. 서버 구성을 확인하세요." });
   }, [run]);
 
   useEffect(() => {
@@ -249,7 +260,11 @@ export function App() {
                 </div>
               ) : (
                 <div className="turn agent" key={t.id}>
-                  <div className="who">FitCheck</div>
+                  <div className="who">
+                    FitCheck
+                    {t.waiting && <span className="turn-badge ask">질문</span>}
+                    {t.degraded && <span className="turn-badge partial">잠정 답변</span>}
+                  </div>
                   {(t.trace?.length || t.streaming) && (
                     <AgentActivity trace={t.trace ?? []} running={!!t.live} />
                   )}
@@ -324,12 +339,27 @@ export function App() {
 }
 
 function finalAgentText(run: AgentRun): string {
+  // A waiting_for_user run's "answer" is its question(s) (docs/25 P0-1).
+  if (run.status === "waiting_for_user") {
+    const q = missingInfoQuestions(run);
+    if (q) return q;
+  }
   const fr = run.final_report;
   if (fr?.llm_final_text) return fr.llm_final_text;
   if (fr?.summary) return fr.summary;
   if (run.status === "cancelled") return "요청에 따라 실행을 취소했습니다.";
-  if (run.status === "failed") return "죄송합니다. 이번 요청을 완료하지 못했습니다. 다시 시도하거나 다른 표현으로 요청해 주세요.";
+  if (run.status === "waiting_for_user") return "이어가려면 추가 정보가 필요합니다.";
+  if (run.status === "failed")
+    return run.error?.user_message ?? "죄송합니다. 이번 요청을 완료하지 못했습니다. 다시 시도하거나 다른 표현으로 요청해 주세요.";
   return "";
+}
+
+function missingInfoQuestions(run: AgentRun): string {
+  const items = (run.state?.missing_info ?? []) as Array<Record<string, unknown>>;
+  const qs = items
+    .map((it) => (typeof it === "string" ? it : (it?.question as string) || (it?.prompt as string) || ""))
+    .filter(Boolean);
+  return qs.join("\n\n");
 }
 
 function rid(): string {

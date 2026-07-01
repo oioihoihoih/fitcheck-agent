@@ -274,6 +274,27 @@ button {
   text-transform: uppercase;
   color: var(--text-faint);
   padding: 0 4px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.turn-badge {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+.turn-badge.ask {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border: 1px solid var(--accent-ring);
+}
+.turn-badge.partial {
+  background: rgba(230, 189, 107, 0.14);
+  color: var(--warn);
+  border: 1px solid rgba(230, 189, 107, 0.3);
 }
 .bubble {
   border-radius: var(--radius);

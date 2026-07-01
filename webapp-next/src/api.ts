@@ -56,6 +56,7 @@ export interface MatchResult {
 export interface FinalReport {
   summary?: string;
   grounded?: boolean;
+  degraded?: boolean;
   report_type?: string;
   llm_final_text?: string;
   grounding_validation?: {
@@ -81,7 +82,7 @@ export interface AgentRun {
   };
   llm?: Record<string, unknown>;
   final_report?: FinalReport | null;
-  error?: { code?: string; message?: string } | null;
+  error?: { code?: string; message?: string; user_message?: string } | null;
   // present on a queued steering reply
   queued?: boolean;
   queue_depth?: number;
