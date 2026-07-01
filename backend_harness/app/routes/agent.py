@@ -207,11 +207,31 @@ async def stream_agent_events(run_id: str, request: Request, response: Response)
     async def events():
         last_signature = None
         last_trace_count = _initial_trace_count_from_request(request, run_id)
-        max_polls = _positive_int_env("FITCHECK_SSE_MAX_POLLS", 600, minimum=30)
+        # docs/24 #6: event-driven feel via a tight poll (default 250ms) instead of
+        # a fixed 1s tick, so tool-call boundaries surface promptly. Total watch
+        # time is preserved by scaling max_polls to the interval.
+        poll_seconds = _positive_float_env("FITCHECK_SSE_POLL_SECONDS", 0.25, minimum=0.05)
+        max_watch_seconds = _positive_int_env("FITCHECK_SSE_MAX_WATCH_SECONDS", 600, minimum=30)
+        max_polls = max(30, int(max_watch_seconds / poll_seconds))
+        last_delta_cursor = 0
         for _ in range(max_polls):
             if await request.is_disconnected():
                 break
             run = _get_session_run(run_id, session_id)
+            # docs/24 #5: emit token deltas the streaming LLM accumulated on the
+            # run, so the client sees the model's text appear progressively.
+            if run:
+                deltas = (run.get("state") or {}).get("model_text_deltas") or []
+                if len(deltas) > last_delta_cursor:
+                    new_text = "".join(deltas[last_delta_cursor:])
+                    last_delta_cursor = len(deltas)
+                    if new_text:
+                        yield _format_sse_event(
+                            event="agent_delta",
+                            data={"run_id": run_id, "text_delta": new_text, "delta_index": last_delta_cursor},
+                            event_id=f"{run_id}:delta:{last_delta_cursor}",
+                            retry_ms=SSE_RETRY_MS,
+                        )
             payload: dict[str, Any]
             if not run:
                 payload = {"status": "not_found", "run_id": run_id, "trace_count": 0}
@@ -255,7 +275,7 @@ async def stream_agent_events(run_id: str, request: Request, response: Response)
                 yield ": keepalive\n\n"
             if payload.get("status") in TERMINAL_AGENT_STATUSES:
                 break
-            await asyncio.sleep(1)
+            await asyncio.sleep(poll_seconds)
 
     return StreamingResponse(
         events(),
@@ -299,6 +319,13 @@ def _non_negative_int(value: str) -> int:
 def _positive_int_env(name: str, default: int, *, minimum: int = 1) -> int:
     try:
         return max(minimum, int(os.getenv(name, str(default))))
+    except ValueError:
+        return max(minimum, default)
+
+
+def _positive_float_env(name: str, default: float, *, minimum: float = 0.01) -> float:
+    try:
+        return max(minimum, float(os.getenv(name, str(default))))
     except ValueError:
         return max(minimum, default)
 

@@ -299,6 +299,40 @@ class FitCheckAgentRuntime:
             "state": saved.get("state", {}),
         }
 
+    def _make_delta_callback(self, run: dict[str, Any]):
+        """Build a token-delta callback that streams the model's text to the run
+        state so the SSE endpoint can surface it live (docs/24 #5). Deltas are
+        buffered and flushed to the store in small batches to bound write cost."""
+        run_id = run.get("run_id")
+        flush = getattr(self.store, "append_model_text_deltas", None)
+        if not run_id or not callable(flush):
+            return None
+        buffer: list[str] = []
+
+        def on_delta(delta: str) -> None:
+            buffer.append(delta)
+            # Flush in small batches (or on sentence boundaries) to keep the
+            # stream responsive without a store write per token.
+            if len(buffer) >= 8 or (delta and delta[-1] in ".!?\n。"):
+                batch = list(buffer)
+                buffer.clear()
+                try:
+                    flush(run_id, batch)
+                except Exception:
+                    pass
+
+        def finalize() -> None:
+            if buffer:
+                batch = list(buffer)
+                buffer.clear()
+                try:
+                    flush(run_id, batch)
+                except Exception:
+                    pass
+
+        on_delta.finalize = finalize  # type: ignore[attr-defined]
+        return on_delta
+
     def reap_abandoned_run(self, run_id: str, *, cancelled: bool) -> dict[str, Any] | None:
         """Finalize a 'running' run whose loop died without releasing its lease
         (docs/24 gap #1). Idempotent: re-checks state under a fresh read."""
@@ -935,12 +969,14 @@ class FitCheckAgentRuntime:
                 )
 
             start = perf_counter()
+            delta_callback = self._make_delta_callback(run)
             try:
                 response = self.llm_client.create_response(
                     instructions=instructions,
                     input_items=input_items_for_llm,
                     tools=self.tool_registry.schemas(),
                     previous_response_id=previous_response_id,
+                    delta_callback=delta_callback,
                 )
             except Exception as exc:
                 pending_tool_output_count = len(pending_tool_outputs)
@@ -988,6 +1024,11 @@ class FitCheckAgentRuntime:
                     },
                 )
                 return self.store.update_run(run)
+
+            # Flush any trailing streamed text deltas (docs/24 #5).
+            _finalize = getattr(delta_callback, "finalize", None)
+            if callable(_finalize):
+                _finalize()
 
             duration_ms = round((perf_counter() - start) * 1000)
             _update_context_budget_summary_from_response(context_budget, response)

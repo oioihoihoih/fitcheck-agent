@@ -392,6 +392,7 @@ class ResponsesApiClient:
         input_items: str | list[dict[str, Any]],
         tools: list[dict[str, Any]],
         previous_response_id: str | None = None,
+        delta_callback: Any | None = None,
     ) -> dict[str, Any]:
         config = get_llm_config()
         if config["api_style"] == "chat_completions":
@@ -416,7 +417,7 @@ class ResponsesApiClient:
 
         self.external_api_called = True
         if _use_openai_sdk(config):
-            return _responses_create_with_openai_sdk(config, payload)
+            return _responses_create_with_openai_sdk(config, payload, delta_callback)
         return _post_json(config, "/responses", payload)
 
     def _create_chat_completion_response(
@@ -624,7 +625,19 @@ def _post_json(config: dict[str, Any], path: str, payload: dict[str, Any]) -> di
     raise RuntimeError("LLM request failed without an exception.")
 
 
-def _responses_create_with_openai_sdk(config: dict[str, Any], payload: dict[str, Any]) -> dict[str, Any]:
+def _responses_create_with_openai_sdk(
+    config: dict[str, Any],
+    payload: dict[str, Any],
+    delta_callback: Any | None = None,
+) -> dict[str, Any]:
+    # docs/24 #5: when a delta callback is provided, stream the Responses API so
+    # the model's text appears progressively; still return the fully-assembled
+    # final response so tool-call parsing downstream is unchanged.
+    if delta_callback is not None:
+        try:
+            return _responses_stream_with_openai_sdk(config, payload, delta_callback)
+        except _LlmStreamingUnsupported:
+            pass  # fall back to buffered call below
     try:
         response = _openai_client(config).responses.create(**payload)
     except Exception as exc:
@@ -635,6 +648,45 @@ def _responses_create_with_openai_sdk(config: dict[str, Any], payload: dict[str,
     data.setdefault("api_style", "responses")
     data.setdefault("raw_response_id", data.get("id"))
     data.setdefault("transport", "openai_python_sdk")
+    if request_id:
+        data.setdefault("request_id", request_id)
+        data.setdefault("provider_request_id", request_id)
+    return data
+
+
+class _LlmStreamingUnsupported(Exception):
+    """Raised when the SDK streaming path is unavailable; caller falls back."""
+
+
+def _responses_stream_with_openai_sdk(
+    config: dict[str, Any], payload: dict[str, Any], delta_callback: Any
+) -> dict[str, Any]:
+    client = _openai_client(config)
+    stream_ctx = getattr(getattr(client, "responses", None), "stream", None)
+    if stream_ctx is None:
+        raise _LlmStreamingUnsupported()
+    try:
+        with client.responses.stream(**payload) as stream:
+            for event in stream:
+                event_type = getattr(event, "type", "")
+                if event_type == "response.output_text.delta":
+                    delta = getattr(event, "delta", "") or ""
+                    if delta:
+                        try:
+                            delta_callback(delta)
+                        except Exception:
+                            pass  # never let a UI callback break the model turn
+            final = stream.get_final_response()
+    except _LlmStreamingUnsupported:
+        raise
+    except Exception as exc:
+        _raise_llm_transport_error_if_sdk_exception(exc)
+        raise
+    request_id = _sdk_request_id(final)
+    data = _model_to_dict(final)
+    data.setdefault("api_style", "responses")
+    data.setdefault("raw_response_id", data.get("id"))
+    data.setdefault("transport", "openai_python_sdk_stream")
     if request_id:
         data.setdefault("request_id", request_id)
         data.setdefault("provider_request_id", request_id)

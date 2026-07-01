@@ -144,6 +144,22 @@ class JsonAgentRunStore:
         run["updated_at"] = _now()
         self._save(data)
 
+    def append_model_text_deltas(self, run_id: str | None, deltas: list[str]) -> None:
+        if not run_id or not deltas:
+            return
+        data = self._load()
+        run = data["runs"].get(run_id)
+        if not run:
+            return
+        state = run.setdefault("state", {})
+        existing = state.get("model_text_deltas") or []
+        existing.extend(deltas)
+        if len(existing) > 4000:
+            existing = existing[-4000:]
+        state["model_text_deltas"] = existing
+        run["updated_at"] = _now()
+        self._save(data)
+
     def run_events(self, run_id: str, after: int = 0) -> list[dict[str, Any]]:
         run = self.get_run(run_id)
         if not run:
@@ -375,6 +391,32 @@ class SqliteAgentRunStore:
                     (now, json.dumps(run, ensure_ascii=False), run_id),
                 )
 
+    def append_model_text_deltas(self, run_id: str | None, deltas: list[str]) -> None:
+        """Append streamed model text deltas to run state (docs/24 #5)."""
+        if not run_id or not deltas:
+            return
+        now = _now()
+        with closing(self._connect()) as conn:
+            with conn:
+                row = conn.execute(
+                    "select payload from agent_runs where run_id = ?", (run_id,)
+                ).fetchone()
+                if not row:
+                    return
+                run = json.loads(row[0])
+                state = run.setdefault("state", {})
+                existing = state.get("model_text_deltas") or []
+                existing.extend(deltas)
+                # Bound memory: keep only a rolling window of recent deltas.
+                if len(existing) > 4000:
+                    existing = existing[-4000:]
+                state["model_text_deltas"] = existing
+                run["updated_at"] = now
+                conn.execute(
+                    "update agent_runs set updated_at = ?, payload = ? where run_id = ?",
+                    (now, json.dumps(run, ensure_ascii=False), run_id),
+                )
+
     def list_runs(self, session_id: str | None = None) -> list[dict[str, Any]]:
         query = "select payload from agent_runs"
         args: tuple[Any, ...] = ()
@@ -557,17 +599,26 @@ def _preserve_concurrent_control_signals(
     incoming: dict[str, Any], stored: dict[str, Any]
 ) -> None:
     """Keep control signals a concurrent request wrote to the store from being
-    clobbered by a mid-loop checkpoint write (docs/24 #1/#2/#3).
+    clobbered by a mid-loop checkpoint write (docs/24 #1/#2/#3/#5).
 
     A running-status write is a checkpoint from the loop's in-memory run, which
     is unaware of a /cancel or /reply that landed on the store meanwhile. Merge
     those back. Terminal-status writes (cancelled/completed/failed) are
-    intentional and always win, so nothing is preserved for them.
+    intentional and always win for cancel/steering, so those are preserved only
+    while running. Streamed text deltas, however, are written to the store by
+    the streaming callback and are absent from the loop's in-memory run, so they
+    must be preserved on ALL writes (including terminal) or the final blob wipes
+    the progressive text the SSE client was reading.
     """
-    if incoming.get("status") != "running":
-        return
     in_state = incoming.setdefault("state", {})
     stored_state = stored.get("state") or {}
+    # Streamed model text deltas: preserve on every write (docs/24 #5).
+    stored_deltas = stored_state.get("model_text_deltas") or []
+    in_deltas = in_state.get("model_text_deltas") or []
+    if len(stored_deltas) > len(in_deltas):
+        in_state["model_text_deltas"] = stored_deltas
+    if incoming.get("status") != "running":
+        return
     # Cancel flag: never lose a pending cancel during a running checkpoint.
     if stored_state.get("cancel_requested") and not in_state.get("cancel_requested"):
         in_state["cancel_requested"] = stored_state["cancel_requested"]
