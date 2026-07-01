@@ -144,6 +144,32 @@ def _cancel_requested(run: dict[str, Any]) -> bool:
     return bool(flag)
 
 
+def _client_supports_delta_callback(client: Any) -> bool:
+    """Whether the LLM client's create_response accepts a delta_callback kwarg.
+
+    The production client streams; test/mock clients keep the older signature.
+    Cached on the client instance to avoid re-introspecting each turn.
+    """
+    cached = getattr(client, "_fitcheck_supports_delta_callback", None)
+    if cached is not None:
+        return bool(cached)
+    supported = False
+    try:
+        import inspect
+
+        params = inspect.signature(client.create_response).parameters
+        supported = "delta_callback" in params or any(
+            p.kind == inspect.Parameter.VAR_KEYWORD for p in params.values()
+        )
+    except (TypeError, ValueError):
+        supported = False
+    try:
+        setattr(client, "_fitcheck_supports_delta_callback", supported)
+    except Exception:
+        pass
+    return supported
+
+
 class LlmClient(Protocol):
     external_api_called: bool
 
@@ -431,6 +457,12 @@ class FitCheckAgentRuntime:
         # the shortlist it produced with prices, and the last search constraints)
         # so the next turn can resolve context-dependent follow-ups such as
         # "두번째꺼 자세히" (ordinal) or "더 싼걸로" (comparative price anchor).
+        # A reply starts a fresh execution turn; any lease left over from the
+        # prior turn is stale, so clear it or the new _run_loop can't acquire one
+        # (docs/24 #15 lease + #7 reply-resume).
+        state.pop("active_lease", None)
+        # Streamed text from the prior turn should not bleed into this one.
+        state.pop("model_text_deltas", None)
         prior_turn_summary = _capture_prior_turn_summary(run)
         state["prior_turn_summary"] = prior_turn_summary
         # docs/24 #8: deterministically resolve an ordinal/positional follow-up
@@ -969,15 +1001,25 @@ class FitCheckAgentRuntime:
                 )
 
             start = perf_counter()
-            delta_callback = self._make_delta_callback(run)
+            # Only pass the streaming delta callback to clients that accept it.
+            # Mock/fake clients used in tests keep the older signature; forcing the
+            # kwarg on them would raise and abort the run (docs/24 #5, kept
+            # backward-compatible).
+            delta_callback = (
+                self._make_delta_callback(run)
+                if _client_supports_delta_callback(self.llm_client)
+                else None
+            )
+            create_kwargs: dict[str, Any] = {
+                "instructions": instructions,
+                "input_items": input_items_for_llm,
+                "tools": self.tool_registry.schemas(),
+                "previous_response_id": previous_response_id,
+            }
+            if delta_callback is not None:
+                create_kwargs["delta_callback"] = delta_callback
             try:
-                response = self.llm_client.create_response(
-                    instructions=instructions,
-                    input_items=input_items_for_llm,
-                    tools=self.tool_registry.schemas(),
-                    previous_response_id=previous_response_id,
-                    delta_callback=delta_callback,
-                )
+                response = self.llm_client.create_response(**create_kwargs)
             except Exception as exc:
                 pending_tool_output_count = len(pending_tool_outputs)
                 error_payload = _llm_response_error_payload(
