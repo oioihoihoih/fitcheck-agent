@@ -53,6 +53,18 @@ export interface MatchResult {
   [k: string]: unknown;
 }
 
+export interface CitationBadge {
+  id: string;
+  label: string;
+  claim_type?: string;
+  claim?: string;
+  source_path: string;
+  source_value_preview?: string;
+  observation_index?: number;
+  source_kind?: string;
+  source_count?: number;
+}
+
 export interface FinalReport {
   summary?: string;
   grounded?: boolean;
@@ -60,7 +72,9 @@ export interface FinalReport {
   report_type?: string;
   llm_final_text?: string;
   grounding_validation?: {
-    citation_badges?: Array<{ id: string; label: string; source_path: string }>;
+    valid?: boolean;
+    reason?: string;
+    citation_badges?: CitationBadge[];
   };
   [k: string]: unknown;
 }

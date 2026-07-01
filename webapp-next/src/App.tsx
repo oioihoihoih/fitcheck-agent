@@ -22,7 +22,8 @@ import { Markdown } from "./components/Markdown";
 import { HistoryDrawer, useHistory } from "./components/HistoryDrawer";
 import { ClosetPage } from "./components/ClosetPage";
 import { FavoritesPage } from "./components/FavoritesPage";
-import { saveFavorite, listFavorites, type ClosetItem } from "./api";
+import { CitationReceipts } from "./components/CitationReceipts";
+import { saveFavorite, listFavorites, type ClosetItem, type CitationBadge } from "./api";
 
 interface Turn {
   id: string;
@@ -36,6 +37,8 @@ interface Turn {
   grounded?: boolean;
   degraded?: boolean; // partial/provisional answer from a failure path (docs/25 P0-2)
   waiting?: boolean; // waiting_for_user — this turn asks a question (docs/25 P0-1)
+  badges?: CitationBadge[]; // grounding citation receipts (docs/25 P1-3)
+  groundingReason?: string;
   live?: boolean; // the currently-running agent turn
 }
 
@@ -172,6 +175,8 @@ export function App() {
               candidates: run.state?.match_results ?? t.candidates,
               reportType: run.final_report?.report_type,
               grounded: run.final_report?.grounded,
+              badges: run.final_report?.grounding_validation?.citation_badges ?? [],
+              groundingReason: run.final_report?.grounding_validation?.reason,
             }
           : t,
       ),
@@ -447,6 +452,13 @@ export function App() {
                       savedKeys={savedKeys}
                     />
                   )}
+                  {!t.live && (t.badges?.length || t.grounded !== undefined) && (
+                    <CitationReceipts
+                      badges={t.badges ?? []}
+                      grounded={t.grounded}
+                      reason={t.groundingReason}
+                    />
+                  )}
                 </div>
               ),
             )
@@ -547,6 +559,8 @@ function rebuildTurns(run: AgentRun): Turn[] {
     grounded: run.final_report?.grounded,
     degraded: run.final_report?.degraded === true,
     waiting: run.status === "waiting_for_user",
+    badges: run.final_report?.grounding_validation?.citation_badges ?? [],
+    groundingReason: run.final_report?.grounding_validation?.reason,
   });
   return out;
 }

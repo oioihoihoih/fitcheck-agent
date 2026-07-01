@@ -836,6 +836,98 @@ button {
   font-variant-numeric: tabular-nums;
 }
 
+/* citation receipts (docs/25 P1-3) */
+.receipts {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  overflow: hidden;
+}
+.receipts-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 13px;
+  background: transparent;
+  border: none;
+  text-align: left;
+}
+.receipts-head:hover {
+  background: var(--surface-2);
+}
+.ground-badge {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 999px;
+}
+.ground-badge.ok {
+  background: rgba(111, 207, 151, 0.15);
+  color: var(--good);
+}
+.ground-badge.warn {
+  background: rgba(230, 189, 107, 0.15);
+  color: var(--warn);
+}
+.receipts-count {
+  flex: 1;
+  font-size: 12px;
+  color: var(--text-faint);
+}
+.receipts-head .chev {
+  font-size: 10px;
+  color: var(--text-faint);
+}
+.receipts-body {
+  border-top: 1px solid var(--border);
+  padding: 6px 0;
+  max-height: 280px;
+  overflow-y: auto;
+}
+.receipt {
+  display: flex;
+  gap: 10px;
+  padding: 8px 13px;
+  align-items: flex-start;
+}
+.receipt-claim {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent);
+  background: var(--accent-soft);
+  padding: 2px 8px;
+  border-radius: 6px;
+  flex: none;
+  min-width: 44px;
+  text-align: center;
+}
+.receipt-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.receipt-label {
+  font-size: 13px;
+  color: var(--text);
+}
+.receipt-preview {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.receipt-source {
+  font-size: 11px;
+  color: var(--text-faint);
+  font-family: var(--mono);
+  word-break: break-all;
+}
+.receipt-note {
+  padding: 8px 13px;
+  font-size: 12.5px;
+  color: var(--text-dim);
+}
+
 /* inline candidate cards inside the conversation */
 .cands {
   display: flex;
