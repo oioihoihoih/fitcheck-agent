@@ -1588,8 +1588,13 @@ def build_search_provider(
     *,
     web_result_path: Path,
     refresh_web_candidates: Callable[[], None],
+    provider_override: str | None = None,
 ) -> SearchProvider:
-    provider = os.getenv("FITCHECK_SEARCH_PROVIDER", "cached_harness").strip().lower()
+    # docs/24 gap #11: allow a per-run caller override, falling back to env.
+    if provider_override and provider_override.strip():
+        provider = provider_override.strip().lower()
+    else:
+        provider = os.getenv("FITCHECK_SEARCH_PROVIDER", "cached_harness").strip().lower()
     if provider in {"jina", "jina_search", "jina_ai"}:
         return JinaSearchProvider(
             api_key=os.getenv("JINA_API_KEY") or os.getenv("FITCHECK_SEARCH_API_KEY"),
@@ -1636,8 +1641,14 @@ def build_search_provider(
     return CachedHarnessSearchProvider(web_result_path, refresh_web_candidates)
 
 
-def build_ocr_provider() -> OcrProvider:
-    provider = os.getenv("FITCHECK_OCR_PROVIDER", "fixture_boundary").strip().lower()
+def build_ocr_provider(provider_override: str | None = None) -> OcrProvider:
+    # docs/24 gap #11: allow a per-run caller override, falling back to env.
+    if provider_override and provider_override.strip():
+        provider = provider_override.strip().lower()
+    else:
+        provider = os.getenv("FITCHECK_OCR_PROVIDER", "fixture_boundary").strip().lower()
+    if provider in {"none", "off", "disabled"}:
+        return FixtureOcrProvider()
     if provider in {"tesseract", "tesseract_cli", "live_tesseract"}:
         return TesseractCliOcrProvider(
             languages=os.getenv("FITCHECK_OCR_LANGS", "kor+eng").strip() or "kor+eng",

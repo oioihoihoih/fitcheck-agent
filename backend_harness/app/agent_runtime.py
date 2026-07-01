@@ -53,6 +53,82 @@ Rules:
 
 EMPTY_SEARCH_ATTEMPT_LIMIT = 5
 
+# System tools that keep the agent loop coherent. A caller's allow/deny list
+# (docs/24 gap #10) must never be able to strand the loop by blocking these,
+# so they are always permitted regardless of caller constraints.
+ALWAYS_ALLOWED_TOOLS = frozenset(
+    {
+        "load_agent_skill",
+        "plan_context_and_sources",
+        "parse_user_goal",
+        "load_closet_memory",
+        "ask_missing_info",
+        "confirm_baseline_identity",
+        "write_purchase_report",
+    }
+)
+
+
+def _run_controls(run: dict[str, Any]) -> dict[str, Any]:
+    """Caller-supplied per-run controls, resolved from the run input payload."""
+    controls = (run.get("input") or {}).get("controls")
+    return controls if isinstance(controls, dict) else {}
+
+
+def _effective_max_turns(run: dict[str, Any], default_max_turns: int) -> int:
+    """Per-run max_turns cap (docs/24 gap #9). Caller value wins when provided."""
+    requested = _run_controls(run).get("max_turns")
+    try:
+        if requested is not None:
+            return max(1, min(int(requested), 40))
+    except (TypeError, ValueError):
+        pass
+    return default_max_turns
+
+
+def _tool_permission_denial(run: dict[str, Any], tool_name: str) -> dict[str, Any] | None:
+    """Return a failed tool-result if the caller's allow/deny list blocks this
+    tool (docs/24 gap #10). System-critical tools are always allowed. Returns
+    None when the tool is permitted."""
+    if tool_name in ALWAYS_ALLOWED_TOOLS:
+        return None
+    controls = _run_controls(run)
+    denied = controls.get("denied_tools")
+    allowed = controls.get("allowed_tools")
+    blocked_reason = None
+    if isinstance(denied, list) and tool_name in denied:
+        blocked_reason = "denied_by_caller"
+    elif isinstance(allowed, list) and allowed and tool_name not in allowed:
+        blocked_reason = "not_in_caller_allowlist"
+    if not blocked_reason:
+        return None
+    return {
+        "status": "failed",
+        "error": {
+            "code": "TOOL_NOT_PERMITTED",
+            "message": (
+                f"Tool '{tool_name}' was blocked by the caller's run controls "
+                f"({blocked_reason})."
+            ),
+            "tool": tool_name,
+            "reason": blocked_reason,
+        },
+    }
+
+
+def _tool_budget_exceeded(run: dict[str, Any]) -> bool:
+    """True if the caller-set per-run tool budget (docs/24 gap #9) is spent."""
+    controls = _run_controls(run)
+    budget = controls.get("tool_budget")
+    try:
+        budget = int(budget) if budget is not None else None
+    except (TypeError, ValueError):
+        budget = None
+    if budget is None:
+        return False
+    spent = int((run.get("state") or {}).get("tool_calls_executed") or 0)
+    return spent >= budget
+
 
 class LlmClient(Protocol):
     external_api_called: bool
@@ -271,8 +347,9 @@ class FitCheckAgentRuntime:
 
     def _run_loop(self, run: dict[str, Any]) -> dict[str, Any]:
         pending_tool_outputs = run.setdefault("state", {}).get("pending_tool_outputs") or []
+        effective_max_turns = _effective_max_turns(run, self.max_turns)
 
-        for _ in range(self.max_turns):
+        for _ in range(effective_max_turns):
             if run.get("status") != "running":
                 return self.store.update_run(run)
 
@@ -2023,6 +2100,43 @@ class FitCheckAgentRuntime:
             status="completed",
             input_payload={"arguments": arguments},
         )
+        # Caller-owned run controls: permission gate and tool budget (docs/24 #9/#10).
+        permission_denial = _tool_permission_denial(run, tool_name)
+        if permission_denial is not None:
+            _record_tool_lifecycle_hook(
+                run,
+                hook_event="PostToolUseFailure",
+                tool_name=tool_name,
+                call_id=call_id,
+                status="failed",
+                duration_ms=round((perf_counter() - start) * 1000),
+                output_payload={"error": permission_denial["error"]},
+            )
+            return permission_denial
+        if tool_name not in ALWAYS_ALLOWED_TOOLS and _tool_budget_exceeded(run):
+            budget_denial = {
+                "status": "failed",
+                "error": {
+                    "code": "TOOL_BUDGET_EXCEEDED",
+                    "message": (
+                        "The caller-set per-run tool budget has been exhausted; "
+                        "no further tool calls will run."
+                    ),
+                    "tool": tool_name,
+                },
+            }
+            _record_tool_lifecycle_hook(
+                run,
+                hook_event="PostToolUseFailure",
+                tool_name=tool_name,
+                call_id=call_id,
+                status="failed",
+                duration_ms=round((perf_counter() - start) * 1000),
+                output_payload={"error": budget_denial["error"]},
+            )
+            return budget_denial
+        state = run.setdefault("state", {})
+        state["tool_calls_executed"] = int(state.get("tool_calls_executed") or 0) + 1
         try:
             if tool_definition is None:
                 result = {

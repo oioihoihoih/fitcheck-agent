@@ -135,19 +135,29 @@ class ToolContext:
             return {}
         return json.loads(self.keyword_result_path.read_text(encoding="utf-8"))
 
+    def _run_control(self, key: str) -> str | None:
+        """Per-run provider override from caller controls (docs/24 gap #11)."""
+        controls = (self.run or {}).get("input", {}).get("controls")
+        if isinstance(controls, dict):
+            value = controls.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+        return None
+
     def search_candidates(self, query: str, refresh: bool = False) -> dict[str, Any]:
         provider = self.search_provider or build_search_provider(
             web_result_path=self.web_result_path,
             refresh_web_candidates=self.refresh_web_candidates,
+            provider_override=self._run_control("search_provider"),
         )
         return provider.search(query, refresh=refresh)
 
     def extract_ocr_evidence(self, product: dict[str, Any]) -> dict[str, Any]:
-        provider = self.ocr_provider or build_ocr_provider()
+        provider = self.ocr_provider or build_ocr_provider(self._run_control("ocr_provider"))
         return provider.extract_product_evidence(product)
 
     def extract_upload_ocr_evidence(self, attachments: list[dict[str, Any]]) -> dict[str, Any]:
-        provider = self.ocr_provider or build_ocr_provider()
+        provider = self.ocr_provider or build_ocr_provider(self._run_control("ocr_provider"))
         return provider.extract_upload_evidence(
             attachments,
             upload_dir=self.web_result_path.parent / "uploads",
@@ -2205,6 +2215,7 @@ def _search_web_candidates(args: dict[str, Any], context: ToolContext) -> dict[s
     provider = context.search_provider or build_search_provider(
         web_result_path=context.web_result_path,
         refresh_web_candidates=context.refresh_web_candidates,
+        provider_override=context._run_control("search_provider"),
     )
     if provider.provider_name == "cached_harness_search" and not _allow_cached_agent_search(context):
         result = _cached_search_configuration_required(query)

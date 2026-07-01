@@ -2,8 +2,43 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
 from typing import Any, Literal
+from urllib.parse import urlparse
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+
+# Boundary limits for user-supplied text. Mature agents bound input size at the
+# API edge to prevent token-cost blowups, memory amplification, and oversized
+# state/trace persistence. See docs/24 gap #14.
+MAX_FREE_TEXT_CHARS = 8000
+MAX_GOAL_CHARS = 4000
+MAX_CANDIDATE_URL_CHARS = 2048
+MAX_REPLY_MESSAGE_CHARS = 8000
+# Per-run control bounds. See docs/24 gaps #9 (budget) and #10 (permissions).
+MAX_TURNS_CEILING = 40
+MIN_TURNS_FLOOR = 1
+TOOL_BUDGET_CEILING = 200
+
+
+def _validate_candidate_url(value: str | None) -> str | None:
+    """Reject a non-fetchable candidate_url instead of silently searching it.
+
+    docs/24 gap #12: a malformed URL was accepted and quietly used as a generic
+    search query with no acknowledgement. We now require a real http(s) URL when
+    a candidate_url is provided (empty/None is fine — it's optional).
+    """
+    if value is None:
+        return None
+    text = value.strip()
+    if not text:
+        return None
+    parsed = urlparse(text)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc or " " in text:
+        raise ValueError(
+            "candidate_url must be a valid http(s) URL "
+            "(e.g. https://example.com/product/123)."
+        )
+    return text
 
 
 @dataclass
@@ -29,14 +64,34 @@ class Attachment(BaseModel):
     source: str = "user_upload"
 
 
+class RunControls(BaseModel):
+    """Caller-supplied per-run controls: budget and tool permissions.
+
+    docs/24 gaps #9 (no per-run budget/max-turns) and #10 (no allow/deny gate).
+    The runtime reads these instead of silently ignoring them.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    max_turns: int | None = Field(default=None, ge=MIN_TURNS_FLOOR, le=MAX_TURNS_CEILING)
+    tool_budget: int | None = Field(default=None, ge=1, le=TOOL_BUDGET_CEILING)
+    allowed_tools: list[str] | None = None
+    denied_tools: list[str] | None = None
+    search_provider: str | None = None
+    ocr_provider: str | None = None
+
+
 class AgentRunCreateRequest(BaseModel):
     model_config = ConfigDict(extra="allow")
 
-    goal: str | None = None
-    free_text: str | None = None
-    candidate_url: str | None = None
+    goal: str | None = Field(default=None, max_length=MAX_GOAL_CHARS)
+    free_text: str | None = Field(default=None, max_length=MAX_FREE_TEXT_CHARS)
+    candidate_url: str | None = Field(default=None, max_length=MAX_CANDIDATE_URL_CHARS)
     attachments: list[Attachment] = Field(default_factory=list)
     refresh_web: bool = False
+    controls: RunControls | None = None
+
+    _check_candidate_url = field_validator("candidate_url")(_validate_candidate_url)
 
     @model_validator(mode="after")
     def require_initial_user_input(self) -> "AgentRunCreateRequest":
@@ -66,7 +121,7 @@ class AgentReplyAnswer(BaseModel):
 class AgentRunReplyRequest(BaseModel):
     model_config = ConfigDict(extra="allow")
 
-    message: str | None = None
+    message: str | None = Field(default=None, max_length=MAX_REPLY_MESSAGE_CHARS)
     answers: list[AgentReplyAnswer] = Field(default_factory=list)
     attachments: list[Attachment] = Field(default_factory=list)
 
