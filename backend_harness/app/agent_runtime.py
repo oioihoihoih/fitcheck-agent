@@ -10,7 +10,7 @@ from time import perf_counter
 from typing import Any, Protocol
 
 from .agent_recipes import agent_skill_catalog, load_agent_skill, match_agent_recipes
-from .agent_run_store import append_trace, build_agent_run_store
+from .agent_run_store import _lease_is_fresh, append_trace, build_agent_run_store
 from .providers import provider_error_metadata_from_result
 from .report_grounding import validate_report_grounding
 from .tool_registry import ToolContext, ToolRegistry, build_fitcheck_tool_registry
@@ -130,6 +130,12 @@ def _tool_budget_exceeded(run: dict[str, Any]) -> bool:
     return spent >= budget
 
 
+def _cancel_requested(run: dict[str, Any]) -> bool:
+    """True if the caller asked to cancel this run (docs/24 gap #1)."""
+    flag = (run.get("state") or {}).get("cancel_requested")
+    return bool(flag)
+
+
 class LlmClient(Protocol):
     external_api_called: bool
 
@@ -230,9 +236,92 @@ class FitCheckAgentRuntime:
     def get_run(self, run_id: str) -> dict[str, Any] | None:
         return self.store.get_run(run_id)
 
+    def cancel_run(self, run_id: str) -> dict[str, Any]:
+        """Request cancellation of a run (docs/24 gap #1).
+
+        A running loop stops cooperatively at its next turn boundary. A run that
+        is not actively looping (e.g. an abandoned 'running' row with a stale
+        lease, or a waiting_for_user run) is finalized to 'cancelled' immediately.
+        """
+        run = self.store.get_run(run_id)
+        if not run:
+            return {"status": "not_found", "run_id": run_id}
+        status = run.get("status")
+        if status in {"completed", "failed", "cancelled", "configuration_required"}:
+            return run
+        self.store.request_cancel(run_id)
+        run = self.store.get_run(run_id) or run
+        lease_fresh = _lease_is_fresh((run.get("state") or {}).get("active_lease"))
+        if status == "running" and lease_fresh:
+            # A live loop owns it; it will observe cancel at its next turn.
+            return run
+        # No live loop (waiting_for_user, or stale/abandoned running): finalize now.
+        return self._finalize_cancelled_run(run)
+
+    def _enqueue_steering_message(
+        self, run: dict[str, Any], payload: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Append a mid-run user message to the durable steering inbox
+        (docs/24 gaps #2/#3). The running loop consumes it at a turn boundary."""
+        state = run.setdefault("state", {})
+        inbox = state.setdefault("pending_user_messages", [])
+        inbox.append(
+            {
+                "message": payload.get("message"),
+                "answers": payload.get("answers") or [],
+                "attachments": payload.get("attachments") or [],
+                "queued_at": _completed_at(),
+            }
+        )
+        append_trace(
+            run,
+            step_type="user_reply",
+            name="queue_steering_message",
+            status="queued",
+            input_payload={"queued_message": payload.get("message")},
+            output_payload={"queue_depth": len(inbox)},
+        )
+        saved = self.store.update_run(run)
+        return {
+            "run_id": run.get("run_id"),
+            "status": "queued",
+            "queued": True,
+            "queue_depth": len(inbox),
+            "message": "메시지를 큐에 넣었습니다. 진행 중인 작업이 다음 안전 지점에서 반영합니다.",
+            "state": saved.get("state", {}),
+        }
+
+    def reap_abandoned_run(self, run_id: str, *, cancelled: bool) -> dict[str, Any] | None:
+        """Finalize a 'running' run whose loop died without releasing its lease
+        (docs/24 gap #1). Idempotent: re-checks state under a fresh read."""
+        run = self.store.get_run(run_id)
+        if not run:
+            return None
+        state = run.get("state") or {}
+        if run.get("status") != "running" or _lease_is_fresh(state.get("active_lease")):
+            return run
+        state.pop("active_lease", None)
+        if cancelled:
+            return self._finalize_cancelled_run(run)
+        run.setdefault("state", {})["pending_tool_outputs"] = []
+        run["status"] = "failed"
+        run["completed_at"] = _completed_at()
+        run["error"] = {
+            "code": "RUN_ABANDONED",
+            "message": "The run loop stopped without finalizing (client disconnect or crash).",
+        }
+        append_trace(
+            run,
+            step_type="guardrail",
+            name="reap_abandoned_run",
+            status="failed",
+            output_payload={"reason": "stale_lease_no_live_loop"},
+        )
+        return self.store.update_run(run)
+
     def reply(self, run_id: str, payload: dict[str, Any]) -> dict[str, Any]:
         run = self.prepare_reply(run_id, payload)
-        if run.get("status") != "running":
+        if run.get("status") not in {"running"}:
             return run
         return self._run_loop(run)
 
@@ -242,15 +331,6 @@ class FitCheckAgentRuntime:
             return {"status": "not_found", "run_id": run_id}
         if not _same_session(run, payload):
             return {"status": "not_found", "run_id": run_id}
-        if run.get("status") == "running":
-            return {
-                "run_id": run_id,
-                "status": "invalid_request",
-                "error": {
-                    "code": "AGENT_RUN_ALREADY_RUNNING",
-                    "message": "Wait for the current agent run to finish before sending another reply.",
-                },
-            }
         if not _has_reply_user_input(payload):
             return {
                 "run_id": run_id,
@@ -260,6 +340,10 @@ class FitCheckAgentRuntime:
                     "message": "Agent reply requires message, answers, or attachments.",
                 },
             }
+        if run.get("status") == "running":
+            # docs/24 gaps #2/#3: don't drop mid-run input. Enqueue it in a
+            # durable inbox so the running loop applies it at the next safe turn.
+            return self._enqueue_steering_message(run, payload)
 
         llm_status = self.llm_client.get_status()
         if llm_status.get("status") != "connected":
@@ -346,12 +430,167 @@ class FitCheckAgentRuntime:
         return self.store.update_run(run)
 
     def _run_loop(self, run: dict[str, Any]) -> dict[str, Any]:
+        """Concurrency-guarded wrapper around the agent loop (docs/24 #15).
+
+        Acquires an exclusive run-loop lease so a second concurrent
+        start/continue/reply cannot double-execute the same run, and always
+        releases it on exit. If the lease is already held by a live loop, the
+        current caller is refused with AGENT_RUN_ALREADY_RUNNING.
+        """
+        run_id = run.get("run_id")
+        acquired, latest = self.store.try_acquire_run_lease(run_id)
+        if not acquired:
+            if latest is not None:
+                return latest
+            return {
+                "run_id": run_id,
+                "status": "invalid_request",
+                "error": {
+                    "code": "AGENT_RUN_ALREADY_RUNNING",
+                    "message": "This run is already executing; wait for it to finish.",
+                },
+            }
+        # Adopt the freshly-leased state (carries active_lease + prior state).
+        run = latest
+        try:
+            return self._run_loop_inner(run)
+        finally:
+            self._release_run_lease(run_id)
+
+    def _release_run_lease(self, run_id: str | None) -> None:
+        if not run_id:
+            return
+        run = self.store.get_run(run_id)
+        if not run:
+            return
+        state = run.setdefault("state", {})
+        if state.pop("active_lease", None) is not None:
+            self.store.update_run(run)
+
+    def _finalize_cancelled_run(self, run: dict[str, Any]) -> dict[str, Any]:
+        """Stop a run because the user cancelled it (docs/24 gap #1)."""
+        state = run.setdefault("state", {})
+        cancel_meta = state.pop("cancel_requested", None)
+        if not isinstance(cancel_meta, dict):
+            cancel_meta = {}
+        state["pending_tool_outputs"] = []
+        state["missing_info"] = []
+        run["status"] = "cancelled"
+        run["completed_at"] = _completed_at()
+        run["error"] = None
+        run["final_report"] = {
+            "summary": "요청에 따라 실행을 취소했습니다.",
+            "grounded": True,
+            "grounding": "run_cancelled_by_user",
+            "report_type": "cancelled",
+        }
+        append_trace(
+            run,
+            step_type="guardrail",
+            name="cancel_agent_run",
+            status="cancelled",
+            output_payload={"requested_at": cancel_meta.get("requested_at")},
+        )
+        return self.store.update_run(run)
+
+    def _cancel_requested_in_store(self, run: dict[str, Any]) -> Any:
+        """Re-read the cancel flag from the store (set by a concurrent /cancel).
+        Returns the flag value (dict) or None/falsey when not cancelled."""
+        run_id = run.get("run_id")
+        if not run_id:
+            return None
+        stored = self.store.get_run(run_id)
+        return (stored or {}).get("state", {}).get("cancel_requested")
+
+    def _merge_store_steering_inbox(self, run: dict[str, Any]) -> None:
+        """Pull steering messages a concurrent /reply wrote to the store into the
+        in-memory run so this loop can consume them (docs/24 #2/#3)."""
+        run_id = run.get("run_id")
+        if not run_id:
+            return
+        stored = self.store.get_run(run_id)
+        stored_inbox = ((stored or {}).get("state") or {}).get("pending_user_messages") or []
+        if not stored_inbox:
+            return
+        state = run.setdefault("state", {})
+        current = state.get("pending_user_messages") or []
+        seen = {json.dumps(m, ensure_ascii=False, sort_keys=True) for m in current}
+        for msg in stored_inbox:
+            key = json.dumps(msg, ensure_ascii=False, sort_keys=True)
+            if key not in seen:
+                current.append(msg)
+                seen.add(key)
+        state["pending_user_messages"] = current
+
+    def _drain_steering_inbox(self, run: dict[str, Any]) -> None:
+        """Apply mid-run steering messages queued via /reply (docs/24 #2/#3).
+
+        Each queued message is injected into the model input stream so the
+        running loop redirects on the next turn, exactly as a between-turn reply
+        would. The inbox is cleared once consumed.
+        """
+        state = run.setdefault("state", {})
+        inbox = state.get("pending_user_messages") or []
+        if not inbox:
+            return
+        pending_outputs = state.get("pending_tool_outputs") or []
+        applied = 0
+        for queued in inbox:
+            reply_payload = {
+                "message": queued.get("message"),
+                "answers": queued.get("answers") or [],
+                "attachments": queued.get("attachments") or [],
+            }
+            run.setdefault("input", {}).setdefault("user_replies", []).append(reply_payload)
+            if reply_payload["attachments"]:
+                run.setdefault("input", {}).setdefault("attachments", []).extend(
+                    reply_payload["attachments"]
+                )
+            pending_outputs.append(_user_reply_input_item(reply_payload, run))
+            applied += 1
+        state["pending_tool_outputs"] = pending_outputs
+        consumed_keys = [
+            json.dumps(m, ensure_ascii=False, sort_keys=True) for m in inbox
+        ]
+        state["pending_user_messages"] = []
+        # Clear the store's inbox for the consumed messages so the preserve-on-
+        # update merge does not resurrect them (docs/24 #2/#3).
+        self.store.clear_steering_inbox(run.get("run_id"), consumed_keys)
+        # A steering message may redirect the goal; drop stale derived context so
+        # the next turn re-plans from the updated conversation (docs/24 #2).
+        for stale_key in ("context_snapshot", "execution_plan"):
+            state.pop(stale_key, None)
+        append_trace(
+            run,
+            step_type="user_reply",
+            name="apply_steering_messages",
+            status="completed",
+            output_payload={"applied_count": applied},
+        )
+
+    def _run_loop_inner(self, run: dict[str, Any]) -> dict[str, Any]:
         pending_tool_outputs = run.setdefault("state", {}).get("pending_tool_outputs") or []
         effective_max_turns = _effective_max_turns(run, self.max_turns)
 
         for _ in range(effective_max_turns):
             if run.get("status") != "running":
                 return self.store.update_run(run)
+
+            # Cooperative cancellation at a safe turn boundary (docs/24 #1).
+            # The cancel flag is written to the store by a *different* request
+            # (POST /cancel), so re-read it from the store each turn — the
+            # in-memory `run` dict this loop holds would never see it otherwise.
+            store_cancel = self._cancel_requested_in_store(run)
+            if _cancel_requested(run) or store_cancel:
+                if isinstance(store_cancel, dict):
+                    run.setdefault("state", {})["cancel_requested"] = store_cancel
+                return self._finalize_cancelled_run(run)
+            self.store.heartbeat_run_lease(run)
+            # Apply steering messages queued mid-run by a concurrent /reply
+            # (docs/24 #2/#3). These are also written to the store by another
+            # request, so merge the store's inbox into the in-memory run first.
+            self._merge_store_steering_inbox(run)
+            self._drain_steering_inbox(run)
 
             baseline_confirmation_args = _baseline_identity_confirmation_args_from_latest_reply(run)
             if (

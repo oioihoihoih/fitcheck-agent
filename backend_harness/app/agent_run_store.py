@@ -10,6 +10,32 @@ from typing import Any
 from uuid import uuid4
 
 
+# A run-loop lease is considered stale (reclaimable) after this many seconds
+# without a heartbeat, so a crashed/abandoned run does not stay locked forever.
+# docs/24 gaps #1 (cancel/reaping) and #15 (concurrency guard).
+RUN_LEASE_STALE_SECONDS = 180.0
+
+
+def _parse_iso(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _lease_is_fresh(lease: dict[str, Any] | None) -> bool:
+    """True if a run-loop lease is held and still within the heartbeat window."""
+    if not isinstance(lease, dict) or not lease.get("token"):
+        return False
+    heartbeat = _parse_iso(lease.get("heartbeat_at") or lease.get("acquired_at"))
+    if heartbeat is None:
+        return False
+    age = (datetime.now(timezone.utc) - heartbeat).total_seconds()
+    return age < RUN_LEASE_STALE_SECONDS
+
+
 class JsonAgentRunStore:
     """JSON-backed run store for the local production-agent prototype."""
 
@@ -61,6 +87,9 @@ class JsonAgentRunStore:
         data = self._load()
         run = deepcopy(run)
         _normalize_execution_plan_for_storage(run)
+        existing = data["runs"].get(run["run_id"])
+        if existing:
+            _preserve_concurrent_control_signals(run, existing)
         run["updated_at"] = _now()
         data["runs"][run["run_id"]] = run
         self._save(data)
@@ -69,6 +98,51 @@ class JsonAgentRunStore:
     def list_runs(self) -> list[dict[str, Any]]:
         runs = list(self._load()["runs"].values())
         return sorted(runs, key=lambda item: item.get("created_at") or "", reverse=True)
+
+    def try_acquire_run_lease(self, run_id: str) -> tuple[bool, dict[str, Any] | None]:
+        data = self._load()
+        run = data["runs"].get(run_id)
+        if not run:
+            return False, None
+        state = run.setdefault("state", {})
+        if _lease_is_fresh(state.get("active_lease")):
+            return False, deepcopy(run)
+        now = _now()
+        state["active_lease"] = {"token": uuid4().hex, "acquired_at": now, "heartbeat_at": now}
+        run["updated_at"] = now
+        self._save(data)
+        return True, deepcopy(run)
+
+    def heartbeat_run_lease(self, run: dict[str, Any]) -> None:
+        lease = (run.get("state") or {}).get("active_lease")
+        if isinstance(lease, dict) and lease.get("token"):
+            lease["heartbeat_at"] = _now()
+
+    def request_cancel(self, run_id: str) -> dict[str, Any] | None:
+        data = self._load()
+        run = data["runs"].get(run_id)
+        if not run:
+            return None
+        run.setdefault("state", {})["cancel_requested"] = {"requested_at": _now(), "source": "user"}
+        run["updated_at"] = _now()
+        self._save(data)
+        return deepcopy(run)
+
+    def clear_steering_inbox(self, run_id: str | None, consumed_keys: list[str]) -> None:
+        if not run_id:
+            return
+        consumed = set(consumed_keys or [])
+        data = self._load()
+        run = data["runs"].get(run_id)
+        if not run:
+            return
+        state = run.setdefault("state", {})
+        inbox = state.get("pending_user_messages") or []
+        state["pending_user_messages"] = [
+            m for m in inbox if json.dumps(m, ensure_ascii=False, sort_keys=True) not in consumed
+        ]
+        run["updated_at"] = _now()
+        self._save(data)
 
     def run_events(self, run_id: str, after: int = 0) -> list[dict[str, Any]]:
         run = self.get_run(run_id)
@@ -181,9 +255,16 @@ class SqliteAgentRunStore:
         run["updated_at"] = _now()
         session_id = run.get("session_id") or run.get("input", {}).get("session_id")
         run["session_id"] = session_id
-        payload = json.dumps(run, ensure_ascii=False)
         with closing(self._connect()) as conn:
             with conn:
+                existing_row = conn.execute(
+                    "select payload from agent_runs where run_id = ?", (run["run_id"],)
+                ).fetchone()
+                if existing_row:
+                    _preserve_concurrent_control_signals(
+                        run, json.loads(existing_row[0])
+                    )
+                payload = json.dumps(run, ensure_ascii=False)
                 conn.execute(
                     """
                     insert into agent_runs
@@ -206,6 +287,93 @@ class SqliteAgentRunStore:
                 )
                 self._sync_trace_events(conn, run)
         return deepcopy(run)
+
+    def try_acquire_run_lease(self, run_id: str) -> tuple[bool, dict[str, Any] | None]:
+        """Atomically acquire the run-loop lease (docs/24 #15).
+
+        Returns (acquired, run). acquired is False when another loop already
+        holds a fresh lease. Reclaims a stale lease from a crashed/abandoned run.
+        """
+        token = uuid4().hex
+        now = _now()
+        with closing(self._connect()) as conn:
+            with conn:
+                row = conn.execute(
+                    "select payload from agent_runs where run_id = ?", (run_id,)
+                ).fetchone()
+                if not row:
+                    return False, None
+                run = json.loads(row[0])
+                state = run.setdefault("state", {})
+                if _lease_is_fresh(state.get("active_lease")):
+                    return False, run
+                state["active_lease"] = {
+                    "token": token,
+                    "acquired_at": now,
+                    "heartbeat_at": now,
+                }
+                run["updated_at"] = now
+                conn.execute(
+                    "update agent_runs set updated_at = ?, payload = ? where run_id = ?",
+                    (now, json.dumps(run, ensure_ascii=False), run_id),
+                )
+        return True, run
+
+    def heartbeat_run_lease(self, run: dict[str, Any]) -> None:
+        lease = (run.get("state") or {}).get("active_lease")
+        if isinstance(lease, dict) and lease.get("token"):
+            lease["heartbeat_at"] = _now()
+
+    def request_cancel(self, run_id: str) -> dict[str, Any] | None:
+        """Set the cancel flag so the run loop stops at its next safe point."""
+        now = _now()
+        with closing(self._connect()) as conn:
+            with conn:
+                row = conn.execute(
+                    "select payload from agent_runs where run_id = ?", (run_id,)
+                ).fetchone()
+                if not row:
+                    return None
+                run = json.loads(row[0])
+                run.setdefault("state", {})["cancel_requested"] = {
+                    "requested_at": now,
+                    "source": "user",
+                }
+                run["updated_at"] = now
+                conn.execute(
+                    "update agent_runs set updated_at = ?, payload = ? where run_id = ?",
+                    (now, json.dumps(run, ensure_ascii=False), run_id),
+                )
+        return run
+
+    def clear_steering_inbox(self, run_id: str | None, consumed_keys: list[str]) -> None:
+        """Remove consumed steering messages from the stored inbox (docs/24 #2/#3)."""
+        if not run_id:
+            return
+        consumed = set(consumed_keys or [])
+        now = _now()
+        with closing(self._connect()) as conn:
+            with conn:
+                row = conn.execute(
+                    "select payload from agent_runs where run_id = ?", (run_id,)
+                ).fetchone()
+                if not row:
+                    return
+                run = json.loads(row[0])
+                state = run.get("state") or {}
+                inbox = state.get("pending_user_messages") or []
+                remaining = [
+                    m
+                    for m in inbox
+                    if json.dumps(m, ensure_ascii=False, sort_keys=True) not in consumed
+                ]
+                state["pending_user_messages"] = remaining
+                run["state"] = state
+                run["updated_at"] = now
+                conn.execute(
+                    "update agent_runs set updated_at = ?, payload = ? where run_id = ?",
+                    (now, json.dumps(run, ensure_ascii=False), run_id),
+                )
 
     def list_runs(self, session_id: str | None = None) -> list[dict[str, Any]]:
         query = "select payload from agent_runs"
@@ -383,6 +551,37 @@ def build_agent_run_store(path: Path) -> JsonAgentRunStore | SqliteAgentRunStore
 
 
 AgentRunStore = JsonAgentRunStore
+
+
+def _preserve_concurrent_control_signals(
+    incoming: dict[str, Any], stored: dict[str, Any]
+) -> None:
+    """Keep control signals a concurrent request wrote to the store from being
+    clobbered by a mid-loop checkpoint write (docs/24 #1/#2/#3).
+
+    A running-status write is a checkpoint from the loop's in-memory run, which
+    is unaware of a /cancel or /reply that landed on the store meanwhile. Merge
+    those back. Terminal-status writes (cancelled/completed/failed) are
+    intentional and always win, so nothing is preserved for them.
+    """
+    if incoming.get("status") != "running":
+        return
+    in_state = incoming.setdefault("state", {})
+    stored_state = stored.get("state") or {}
+    # Cancel flag: never lose a pending cancel during a running checkpoint.
+    if stored_state.get("cancel_requested") and not in_state.get("cancel_requested"):
+        in_state["cancel_requested"] = stored_state["cancel_requested"]
+    # Steering inbox: merge stored messages the in-memory run hasn't consumed.
+    stored_inbox = stored_state.get("pending_user_messages") or []
+    if stored_inbox:
+        current = in_state.get("pending_user_messages") or []
+        seen = {json.dumps(m, ensure_ascii=False, sort_keys=True) for m in current}
+        for msg in stored_inbox:
+            key = json.dumps(msg, ensure_ascii=False, sort_keys=True)
+            if key not in seen:
+                current.append(msg)
+                seen.add(key)
+        in_state["pending_user_messages"] = current
 
 
 def _normalize_execution_plan_for_storage(run: dict[str, Any]) -> None:

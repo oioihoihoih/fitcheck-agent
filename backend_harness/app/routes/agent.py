@@ -29,6 +29,7 @@ SSE_RETRY_MS = 3000
 TERMINAL_AGENT_STATUSES = {
     "completed",
     "failed",
+    "cancelled",
     "configuration_required",
     "invalid_request",
     "not_found",
@@ -91,6 +92,16 @@ def continue_agent_run(run_id: str, request: Request, response: Response) -> dic
         return {"status": "not_found", "run_id": run_id}
     runtime = production_agent_runtime()
     return runtime.continue_run(run_id)
+
+
+@router.post("/runs/{run_id}/cancel", response_model=AgentRunResponse)
+def cancel_agent_run(run_id: str, request: Request, response: Response) -> dict:
+    session_id = get_or_create_session_id(request, response)
+    run = _get_session_run(run_id, session_id)
+    if not run:
+        return {"status": "not_found", "run_id": run_id}
+    runtime = production_agent_runtime()
+    return runtime.cancel_run(run_id)
 
 
 @router.post("/runs/{run_id}/reply", response_model=AgentRunResponse)
@@ -1374,4 +1385,26 @@ def _get_session_run(run_id: str, session_id: str) -> dict[str, Any] | None:
     run_session_id = run.get("session_id") or run.get("input", {}).get("session_id")
     if run_session_id and run_session_id != session_id:
         return None
+    run = _reap_abandoned_run(run)
     return run
+
+
+def _reap_abandoned_run(run: dict[str, Any]) -> dict[str, Any]:
+    """Finalize a 'running' run whose loop died without releasing (docs/24 #1).
+
+    A run stays 'running' only while a live loop holds a fresh lease. If the
+    lease has gone stale, no loop is executing, so the row is abandoned: reap it
+    to 'cancelled' (if the user asked to cancel) or 'failed'. This also gives the
+    system an automatic reaper for orphaned runs instead of permanent zombies.
+    """
+    from ..agent_run_store import _lease_is_fresh
+
+    if run.get("status") != "running":
+        return run
+    state = run.get("state") or {}
+    if _lease_is_fresh(state.get("active_lease")):
+        return run  # a live loop still owns it
+    runtime = production_agent_runtime()
+    cancelled = bool(state.get("cancel_requested"))
+    reaped = runtime.reap_abandoned_run(run["run_id"], cancelled=cancelled)
+    return reaped or run
