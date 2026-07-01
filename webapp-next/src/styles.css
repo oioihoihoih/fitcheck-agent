@@ -289,6 +289,83 @@ button {
 .llm-pill.error .dot {
   background: var(--bad);
 }
+
+/* provider/mode honesty tags (docs/25 P1-6) */
+.provtags {
+  position: relative;
+}
+.provtags-toggle {
+  font-size: 12px;
+  padding: 5px 11px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-dim);
+}
+.provtags-toggle.all-live {
+  color: var(--good);
+  border-color: rgba(111, 207, 151, 0.3);
+}
+.provtags-toggle.has-demo {
+  color: var(--warn);
+  border-color: rgba(230, 189, 107, 0.3);
+}
+.provtags-pop {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 280px;
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow);
+  padding: 8px;
+  z-index: 30;
+}
+.provtag-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  font-size: 12.5px;
+}
+.provtag-name {
+  width: 52px;
+  color: var(--text-dim);
+  flex: none;
+}
+.provtag-prov {
+  flex: 1;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.provtag-mode {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  flex: none;
+}
+.provtag-mode.live {
+  background: rgba(111, 207, 151, 0.15);
+  color: var(--good);
+}
+.provtag-mode.demo {
+  background: rgba(230, 189, 107, 0.15);
+  color: var(--warn);
+}
+.provtag-note {
+  font-size: 11px;
+  color: var(--text-faint);
+  padding: 6px 8px 2px;
+  line-height: 1.5;
+  border-top: 1px solid var(--border);
+  margin-top: 4px;
+}
 .icon-btn {
   border: 1px solid var(--border);
   background: var(--surface);

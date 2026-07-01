@@ -103,11 +103,24 @@ export interface AgentRun {
   message?: string;
 }
 
+export interface ProviderDetail {
+  selected?: string;
+  provider?: string;
+  mode?: string; // "live_provider" | "cached_harness" | "fixture_boundary" | ...
+  external_provider_configured?: boolean;
+}
+
 export interface ApiStatus {
   status: string;
   session_id: string;
   llm: { status: string; provider?: string; model?: string; api_style?: string };
-  providers: Record<string, unknown>;
+  providers: {
+    search?: ProviderDetail;
+    ocr?: ProviderDetail;
+    vision?: ProviderDetail;
+    page_fetch?: ProviderDetail;
+    [k: string]: ProviderDetail | undefined;
+  };
   [k: string]: unknown;
 }
 

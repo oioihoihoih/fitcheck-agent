@@ -23,6 +23,7 @@ import { HistoryDrawer, useHistory } from "./components/HistoryDrawer";
 import { ClosetPage } from "./components/ClosetPage";
 import { FavoritesPage } from "./components/FavoritesPage";
 import { CitationReceipts } from "./components/CitationReceipts";
+import { ProviderTags } from "./components/ProviderTags";
 import { saveFavorite, listFavorites, uploadImage, type ClosetItem, type CitationBadge, type Attachment } from "./api";
 
 interface Turn {
@@ -408,6 +409,7 @@ export function App() {
               저장함
             </button>
           </div>
+          <ProviderTags status={status} />
           <span className={`llm-pill ${llmConnected ? "connected" : status ? "error" : ""}`}>
             <span className="dot" />
             {llmConnected
