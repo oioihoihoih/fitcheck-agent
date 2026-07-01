@@ -9,78 +9,119 @@ import {
   type AgentRun,
   type ApiStatus,
   type CreateRunBody,
+  type MatchResult,
   type RunControls,
+  type TraceEntry,
 } from "./api";
 import { useRunStream } from "./useRunStream";
-import { SidePanel, type RunControlsForm } from "./components/SidePanel";
+import { AgentActivity } from "./components/AgentActivity";
+import { Candidates } from "./components/Candidates";
+import { ControlsDrawer, type RunControlsForm } from "./components/ControlsDrawer";
+import { Markdown } from "./components/Markdown";
 
-interface ChatMessage {
+interface Turn {
   id: string;
   role: "user" | "agent";
   text: string;
   streaming?: boolean;
+  // agent turns own a snapshot of the trace + candidates that produced them
+  trace?: TraceEntry[];
+  candidates?: MatchResult[];
+  reportType?: string;
+  grounded?: boolean;
+  live?: boolean; // the currently-running agent turn
 }
 
 const EXAMPLES = [
-  "검은색 와이드 슬랙스랑 비슷한거 찾아줘",
-  "흰색 반팔 티셔츠 무지 코튼 기본핏으로",
-  "내가 좋아하는 후드티랑 핏이 비슷한 옷",
+  { icon: "◆", text: "검은색 와이드 슬랙스랑 비슷한거 찾아줘" },
+  { icon: "◆", text: "흰색 반팔 티셔츠 무지 코튼 기본핏으로" },
+  { icon: "◆", text: "내가 좋아하는 후드티랑 핏이 비슷한 옷" },
 ];
 
 export function App() {
   const [status, setStatus] = useState<ApiStatus | null>(null);
   const [runId, setRunId] = useState<string | null>(null);
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [turns, setTurns] = useState<Turn[]>([]);
   const [input, setInput] = useState("");
   const [banner, setBanner] = useState<{ kind: "error" | "info" | "warn"; text: string } | null>(null);
+  const [showControls, setShowControls] = useState(false);
   const [form, setForm] = useState<RunControlsForm>({
     maxTurns: "",
     toolBudget: "",
     searchProvider: "",
     refreshWeb: false,
   });
-  const chatRef = useRef<HTMLDivElement>(null);
-  const agentMsgId = useRef<string | null>(null);
+  const streamRef = useRef<HTMLDivElement>(null);
+  const taRef = useRef<HTMLTextAreaElement>(null);
+  const liveTurnId = useRef<string | null>(null);
 
   const { run, streamedText, status: runStatus } = useRunStream(runId);
   const running = !!runId && !isTerminal(runStatus);
 
-  // Load LLM/provider status once.
   useEffect(() => {
-    getStatus()
-      .then(setStatus)
-      .catch(() => setStatus(null));
+    getStatus().then(setStatus).catch(() => setStatus(null));
   }, []);
 
-  // Reflect streamed text into the live agent message.
+  // Feed streamed text + live trace/candidates into the live agent turn.
   useEffect(() => {
-    if (!streamedText || !agentMsgId.current) return;
-    const id = agentMsgId.current;
-    setMessages((prev) =>
-      prev.map((m) => (m.id === id ? { ...m, text: streamedText, streaming: running } : m)),
+    if (!liveTurnId.current) return;
+    const id = liveTurnId.current;
+    setTurns((prev) =>
+      prev.map((t) =>
+        t.id === id
+          ? {
+              ...t,
+              text: streamedText || t.text,
+              streaming: running,
+              live: running,
+              trace: run?.trace ?? t.trace,
+              candidates: run?.state?.match_results ?? t.candidates,
+            }
+          : t,
+      ),
     );
-  }, [streamedText, running]);
+  }, [streamedText, running, run]);
 
-  // When the run reaches a terminal state, finalize the agent message from the report.
+  // Finalize the live agent turn when the run reaches a terminal state.
   useEffect(() => {
-    if (!run || !isTerminal(run.status) || !agentMsgId.current) return;
-    const id = agentMsgId.current;
+    if (!run || !isTerminal(run.status) || !liveTurnId.current) return;
+    const id = liveTurnId.current;
     const finalText = finalAgentText(run);
-    setMessages((prev) =>
-      prev.map((m) => (m.id === id ? { ...m, text: finalText || m.text, streaming: false } : m)),
+    setTurns((prev) =>
+      prev.map((t) =>
+        t.id === id
+          ? {
+              ...t,
+              text: finalText || t.text,
+              streaming: false,
+              live: false,
+              trace: run.trace ?? t.trace,
+              candidates: run.state?.match_results ?? t.candidates,
+              reportType: run.final_report?.report_type,
+              grounded: run.final_report?.grounded,
+            }
+          : t,
+      ),
     );
-    agentMsgId.current = null;
-    if (run.status === "failed" && run.error?.code) {
-      setBanner({ kind: "warn", text: `실행이 종료되었습니다: ${run.error.code}` });
-    } else if (run.status === "configuration_required") {
-      setBanner({ kind: "error", text: "LLM 설정이 필요합니다. 서버의 OPENAI_API_KEY/FITCHECK_LLM_* 구성을 확인하세요." });
-    }
+    liveTurnId.current = null;
+    if (run.status === "cancelled") setBanner({ kind: "info", text: "실행을 취소했습니다." });
+    else if (run.status === "failed" && run.error?.code)
+      setBanner({ kind: "warn", text: `종료 코드: ${run.error.code}` });
+    else if (run.status === "configuration_required")
+      setBanner({ kind: "error", text: "LLM 설정이 필요합니다. 서버 구성을 확인하세요." });
   }, [run]);
 
-  // Auto-scroll chat.
   useEffect(() => {
-    chatRef.current?.scrollTo({ top: chatRef.current.scrollHeight, behavior: "smooth" });
-  }, [messages]);
+    streamRef.current?.scrollTo({ top: streamRef.current.scrollHeight, behavior: "smooth" });
+  }, [turns]);
+
+  // Auto-grow textarea.
+  useEffect(() => {
+    const ta = taRef.current;
+    if (!ta) return;
+    ta.style.height = "auto";
+    ta.style.height = Math.min(ta.scrollHeight, 180) + "px";
+  }, [input]);
 
   const llmConnected = status?.llm?.status === "connected";
 
@@ -98,27 +139,24 @@ export function App() {
     setInput("");
     setBanner(null);
 
-    const userMsg: ChatMessage = { id: rid(), role: "user", text };
+    const userTurn: Turn = { id: rid(), role: "user", text };
     const agentId = rid();
-    agentMsgId.current = agentId;
-    setMessages((prev) => [
+    liveTurnId.current = agentId;
+    setTurns((prev) => [
       ...prev,
-      userMsg,
-      { id: agentId, role: "agent", text: "", streaming: true },
+      userTurn,
+      { id: agentId, role: "agent", text: "", streaming: true, live: true, trace: [], candidates: [] },
     ]);
 
     try {
       if (running && runId) {
-        // Steering: enqueue into the running run (docs/24 #2/#3).
         const res = await replyToRun(runId, text);
-        if (res.queued) {
+        if (res.queued)
           setBanner({
             kind: "info",
-            text: `진행 중인 작업에 메시지를 큐로 전달했습니다 (대기 ${res.queue_depth ?? 1}건). 다음 안전 지점에서 반영됩니다.`,
+            text: `진행 중 작업에 메시지를 전달했습니다 (대기 ${res.queue_depth ?? 1}건). 다음 안전 지점에서 반영됩니다.`,
           });
-        }
       } else if (runId && isTerminal(runStatus)) {
-        // Follow-up turn on a finished run (multi-turn context — docs/24 #7/#8/#16).
         const res = await replyToRun(runId, text);
         if (res.run_id) setRunId(res.run_id);
       } else {
@@ -126,17 +164,17 @@ export function App() {
         if (controls) body.controls = controls;
         const res = await createRun(body);
         if (res.status === "configuration_required") {
-          setBanner({ kind: "error", text: "LLM 설정이 필요합니다. 서버 구성을 확인하세요." });
-          agentMsgId.current = null;
+          setBanner({ kind: "error", text: "LLM 설정이 필요합니다." });
+          liveTurnId.current = null;
           return;
         }
         if (res.run_id) setRunId(res.run_id);
       }
     } catch (err) {
-      const msg = err instanceof ApiError ? err.message : "요청에 실패했습니다.";
-      setBanner({ kind: "error", text: msg });
-      agentMsgId.current = null;
-      setMessages((prev) => prev.filter((m) => m.id !== agentId));
+      setBanner({ kind: "error", text: err instanceof ApiError ? err.message : "요청에 실패했습니다." });
+      const dropId = agentId;
+      liveTurnId.current = null;
+      setTurns((prev) => prev.filter((t) => t.id !== dropId));
     }
   }
 
@@ -144,80 +182,116 @@ export function App() {
     if (!runId) return;
     try {
       await cancelRun(runId);
-      setBanner({ kind: "info", text: "취소를 요청했습니다. 에이전트가 다음 안전 지점에서 멈춥니다." });
+      setBanner({ kind: "info", text: "취소를 요청했습니다. 다음 안전 지점에서 멈춥니다." });
     } catch (err) {
-      setBanner({ kind: "error", text: err instanceof ApiError ? err.message : "취소에 실패했습니다." });
+      setBanner({ kind: "error", text: err instanceof ApiError ? err.message : "취소 실패." });
     }
   }
 
   function newSession() {
     setRunId(null);
-    setMessages([]);
+    setTurns([]);
     setBanner(null);
-    agentMsgId.current = null;
+    liveTurnId.current = null;
   }
 
   return (
     <div className="app">
-      <div className="main">
-        <header className="header">
-          <div>
-            <h1>FitCheck</h1>
-            <span className="tag">AI 의류 탐색 에이전트</span>
+      <div className="topbar">
+        <div className="brand">
+          <div className="mark">F</div>
+          <div className="name">
+            FitCheck
+            <span className="sub">AI 의류 탐색 에이전트</span>
           </div>
-          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-            <span className={`llm-pill ${llmConnected ? "connected" : status ? "error" : ""}`}>
-              <span className="dot" />
-              {llmConnected
-                ? `LLM 연결됨 · ${String(status?.llm?.model ?? "")}`
-                : status
-                  ? "LLM 미설정"
-                  : "상태 확인 중"}
-            </span>
-            <button className="btn ghost" onClick={newSession}>
-              새 세션
+        </div>
+        <div className="topbar-right">
+          <span className={`llm-pill ${llmConnected ? "connected" : status ? "error" : ""}`}>
+            <span className="dot" />
+            {llmConnected
+              ? `${String(status?.llm?.model ?? "LLM")}`
+              : status
+                ? "LLM 미설정"
+                : "연결 확인 중"}
+          </span>
+          {turns.length > 0 && (
+            <button className="icon-btn" onClick={newSession}>
+              새 대화
             </button>
-          </div>
-        </header>
+          )}
+        </div>
+      </div>
 
-        {banner && <div className={`banner ${banner.kind}`}>{banner.text}</div>}
-
-        <div className="chat" ref={chatRef}>
-          {messages.length === 0 ? (
-            <div className="empty-state">
-              <h2>어떤 옷과 비슷한 걸 찾아드릴까요?</h2>
+      <div className="stream" ref={streamRef}>
+        <div className="stream-inner">
+          {turns.length === 0 ? (
+            <div className="hero">
+              <div className="glyph">✦</div>
+              <h1>어떤 옷과 비슷한 걸 찾아드릴까요?</h1>
               <p>
-                평소 만족스럽게 입는 옷의 핏·소재·사이즈·실루엣·디자인을 알려주세요. 실시간으로 검색·수집·정규화·점수화 과정을
-                보여드리고, 근거가 검증된 후보를 순위로 제시합니다.
+                평소 만족스럽게 입는 옷의 핏·소재·사이즈·실루엣·디자인을 알려주세요. 검색부터 수집·정규화·점수화까지
+                실시간으로 보여드리고, 근거가 검증된 후보를 순위로 제시합니다.
               </p>
               <div className="examples">
                 {EXAMPLES.map((ex) => (
-                  <button key={ex} className="example-chip" onClick={() => setInput(ex)}>
-                    {ex}
+                  <button key={ex.text} className="example-card" onClick={() => { setInput(ex.text); taRef.current?.focus(); }}>
+                    <span className="ico">{ex.icon}</span>
+                    {ex.text}
                   </button>
                 ))}
               </div>
             </div>
           ) : (
-            messages.map((m) => (
-              <div key={m.id} className={`msg ${m.role} ${m.streaming ? "streaming" : ""}`}>
-                <div className="role">{m.role === "user" ? "나" : "FitCheck"}</div>
-                {m.text || (m.streaming ? "생각 중…" : "")}
-                {m.streaming && <span className="caret" />}
-              </div>
-            ))
+            turns.map((t) =>
+              t.role === "user" ? (
+                <div className="turn user" key={t.id}>
+                  <div className="bubble">{t.text}</div>
+                </div>
+              ) : (
+                <div className="turn agent" key={t.id}>
+                  <div className="who">FitCheck</div>
+                  {(t.trace?.length || t.streaming) && (
+                    <AgentActivity trace={t.trace ?? []} running={!!t.live} />
+                  )}
+                  {(t.text || t.streaming) && (
+                    <div className="bubble">
+                      {t.streaming ? (
+                        <>
+                          {t.text}
+                          <span className="caret" />
+                        </>
+                      ) : (
+                        <Markdown text={t.text} />
+                      )}
+                    </div>
+                  )}
+                  {t.candidates && t.candidates.length > 0 && (
+                    <Candidates
+                      candidates={t.candidates}
+                      report={{ report_type: t.reportType, grounded: t.grounded }}
+                    />
+                  )}
+                </div>
+              ),
+            )
           )}
+          {banner && <div className={`banner ${banner.kind}`}>{banner.text}</div>}
         </div>
+      </div>
 
+      <div className="composer-wrap">
+        {showControls && <ControlsDrawer form={form} onChange={setForm} disabled={running} />}
         <div className="composer">
           {running && (
-            <div className="status-row">
+            <div className="running-strip">
               <span className="spinner" />
               에이전트 실행 중 · 메시지를 보내면 진행 중 작업에 반영됩니다
             </div>
           )}
-          <div className="composer-row">
+          <div className="input-shell">
             <textarea
+              ref={taRef}
+              rows={1}
               value={input}
               placeholder={running ? "진행 방향을 바꾸거나 추가 요청을 입력하세요…" : "예: 검은색 와이드 슬랙스랑 비슷한거 찾아줘"}
               onChange={(e) => setInput(e.target.value)}
@@ -229,22 +303,22 @@ export function App() {
               }}
             />
             {running && (
-              <button className="btn danger" onClick={onCancel}>
-                취소
+              <button className="stop-btn" onClick={onCancel}>
+                ■ 취소
               </button>
             )}
-            <button className="btn primary" onClick={send} disabled={!input.trim()}>
-              {running ? "전달" : "보내기"}
+            <button className="send-btn" onClick={send} disabled={!input.trim()} aria-label="보내기">
+              {running ? "↺" : "↑"}
             </button>
           </div>
-          <div className="composer-hint">
-            <span>Enter 전송 · Shift+Enter 줄바꿈</span>
-            {runId && <span>run: {runId.slice(0, 12)}</span>}
+          <div className="composer-foot">
+            <button className="settings-toggle" onClick={() => setShowControls((s) => !s)}>
+              ⚙ 실행 설정 {showControls ? "닫기" : ""}
+            </button>
+            <span>Enter 전송 · Shift+Enter 줄바꿈{runId ? ` · ${runId.slice(0, 12)}` : ""}</span>
           </div>
         </div>
       </div>
-
-      <SidePanel run={run} form={form} onFormChange={setForm} disabled={running} />
     </div>
   );
 }
@@ -254,7 +328,7 @@ function finalAgentText(run: AgentRun): string {
   if (fr?.llm_final_text) return fr.llm_final_text;
   if (fr?.summary) return fr.summary;
   if (run.status === "cancelled") return "요청에 따라 실행을 취소했습니다.";
-  if (run.status === "failed") return "죄송합니다. 이번 요청을 완료하지 못했습니다.";
+  if (run.status === "failed") return "죄송합니다. 이번 요청을 완료하지 못했습니다. 다시 시도하거나 다른 표현으로 요청해 주세요.";
   return "";
 }
 
