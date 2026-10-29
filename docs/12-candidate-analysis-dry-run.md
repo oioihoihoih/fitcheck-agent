@@ -28,8 +28,8 @@ python backend_harness/verify_end_to_end.py
 생성 결과:
 
 ```text
-C:\com2us\harness_outputs\end_to_end_db.json
-C:\com2us\harness_outputs\end_to_end_result.json
+harness_outputs\end_to_end_db.json
+harness_outputs\end_to_end_result.json
 ```
 
 ## 사용한 기준 옷

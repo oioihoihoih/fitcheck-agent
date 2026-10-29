@@ -1,6 +1,6 @@
 # Backend Harness Agent Instructions
 
-This file is for agent sessions whose working root is `C:\com2us\backend_harness`.
+This file is for agent sessions whose working root is `backend_harness`.
 It is scoped to backend/API/runtime work. Do not use it as end-user FitCheck
 conversation context.
 
@@ -12,7 +12,7 @@ There are two separate surfaces:
   runtime, backend-owned tool registry, provider boundaries, grounding, and
   verification.
 - Generic development harness API: mounted from sibling package
-  `C:\com2us\developer_harness` through `web_server.py` at `/api/harness/v1`
+  `developer_harness` through `web_server.py` at `/api/harness/v1`
   and `/api/dev-harness`.
 
 Keep these surfaces separate. Do not route FitCheck product behavior through the

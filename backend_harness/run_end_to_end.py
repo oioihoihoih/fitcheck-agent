@@ -22,10 +22,10 @@ def main() -> None:
     closet_payload = {
         "user_id": "demo_user_001",
         "input_channel": "mobile_web",
-        "text_path": str(project_root / "현재 내 옷 정보" / "옷 정보.txt"),
+        "text_path": str(project_root / "samples" / "closet" / "owned_item_info.txt"),
         "uploaded_assets": [
             {
-                "path": str(project_root / "현재 내 옷 정보" / "내 옷 사진.jpg"),
+                "path": str(project_root / "samples" / "closet" / "owned_item_photo.jpg"),
                 "asset_type_hint": "item_photo",
             }
         ],

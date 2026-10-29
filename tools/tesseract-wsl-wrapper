@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-TESSERACT_EXE="/mnt/c/Program Files/Tesseract-OCR/tesseract.exe"
-TESSDATA_DIR="C:\\com2us\\tools\\tessdata"
-TMP_DIR="/mnt/c/com2us/harness_outputs/tesseract_tmp"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+TESSERACT_EXE="${TESSERACT_EXE:-/mnt/c/Program Files/Tesseract-OCR/tesseract.exe}"
+TESSDATA_DIR="${TESSDATA_DIR:-$(wslpath -w "$SCRIPT_DIR/tessdata")}"
+TMP_DIR="${TESSERACT_TMP_DIR:-$SCRIPT_DIR/../harness_outputs/tesseract_tmp}"
 
 if [[ ! -x "$TESSERACT_EXE" ]]; then
   echo "Tesseract executable not found: $TESSERACT_EXE" >&2

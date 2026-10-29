@@ -30,7 +30,7 @@ Live search and live page fetch boundaries use limited GET retries. Retry metada
 
 ## Run
 
-From `C:\com2us`:
+From the repository root:
 
 ```powershell
 python backend_harness/run_closet_onboarding.py
@@ -69,9 +69,9 @@ Production agent route의 `search_web_candidates`는 cached harness 후보를 �
 
 Production agent runtime은 grounded `write_purchase_report` tool output을 최종 보고서로 채택합니다. 마지막 LLM 문장은 `llm_final_text`로만 보관해, 모델이 도구 밖에서 문장을 장식하다가 grounding validation을 깨는 문제를 줄입니다. 후보 여러 개를 enrich하는 live run을 위해 기본 `FITCHECK_AGENT_MAX_TURNS`는 18입니다.
 
-OCR live provider는 `FITCHECK_OCR_PROVIDER=tesseract_cli`로 선택합니다. Windows에서는 `UB-Mannheim.TesseractOCR` winget 패키지와 `kor.traineddata`가 필요합니다. 현재 WSL 로컬 검증은 `tools/tesseract-wsl-wrapper`를 `FITCHECK_TESSERACT_CMD`로 지정하고, `TESSDATA_PREFIX=C:\com2us\tools\tessdata`에 `kor`, `eng`, `osd` language data를 두고 통과했습니다.
+OCR live provider는 `FITCHECK_OCR_PROVIDER=tesseract_cli`로 선택합니다. Windows에서는 `UB-Mannheim.TesseractOCR` winget 패키지와 `kor.traineddata`가 필요합니다. 현재 WSL 로컬 검증은 `tools/tesseract-wsl-wrapper`를 `FITCHECK_TESSERACT_CMD`로 지정하고, `TESSDATA_PREFIX=<repo>\tools\tessdata`에 `kor`, `eng`, `osd` language data를 두고 통과했습니다.
 
-Windows PATH가 새 터미널에 반영되지 않는 경우를 위해 Windows 직접 실행 환경에서는 `FITCHECK_TESSERACT_CMD=C:\Program Files\Tesseract-OCR\tesseract.exe`를 설정할 수 있습니다. WSL 실행 환경에서는 Linux 경로와 임시 이미지를 Windows Tesseract가 읽을 수 있게 `FITCHECK_TESSERACT_CMD=/mnt/c/com2us/tools/tesseract-wsl-wrapper`를 사용합니다. Provider는 이 값, `TESSERACT_CMD`, PATH, 기본 설치 경로 순서로 실행 파일을 찾습니다. 현재 `.env`는 `FITCHECK_OCR_PROVIDER=tesseract_cli`로 live OCR을 사용합니다.
+Windows PATH가 새 터미널에 반영되지 않는 경우를 위해 Windows 직접 실행 환경에서는 `FITCHECK_TESSERACT_CMD=C:\Program Files\Tesseract-OCR\tesseract.exe`를 설정할 수 있습니다. WSL 실행 환경에서는 Linux 경로와 임시 이미지를 Windows Tesseract가 읽을 수 있게 `FITCHECK_TESSERACT_CMD=tools/tesseract-wsl-wrapper`를 사용합니다. Provider는 이 값, `TESSERACT_CMD`, PATH, 기본 설치 경로 순서로 실행 파일을 찾습니다. 현재 `.env`는 `FITCHECK_OCR_PROVIDER=tesseract_cli`로 live OCR을 사용합니다.
 
 Live OCR은 연결되어도 쇼핑몰 이미지 품질에 따라 `completed_empty`가 정상적으로 발생할 수 있습니다. 예를 들어 2026-06-08 live agent run `run_167dca2e9538`에서는 Fruitsfamily 후보 상세 이미지 8개가 OCR target으로 분류되어 Tesseract가 호출됐지만 모두 텍스트 없음으로 종료됐고, 최종 보고서는 이 부족한 실측/소재 근거를 `need_more_info`로 반영했습니다.
 
@@ -142,8 +142,8 @@ harness_outputs/web_candidates_match_result.json
 The first dry-run uses:
 
 ```text
-C:\com2us\현재 내 옷 정보\옷 정보.txt
-C:\com2us\현재 내 옷 정보\내 옷 사진.jpg
+samples/closet/owned_item_info.txt
+samples/closet/owned_item_photo.jpg
 ```
 
 The text file is treated as information entered through a mobile web form, and the image is treated as an uploaded closet item photo.

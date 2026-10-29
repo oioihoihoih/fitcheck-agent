@@ -1019,7 +1019,7 @@ The CLI `plan` helper should surface this gate for task, trace, and eval
 workflows so controller loops validate read-model support before depending on
 projection summaries.
 
-Continue generic harness work from `C:\com2us\developer_harness` when possible.
+Continue generic harness work from `developer_harness` when possible.
 That directory now has its own `AGENTS.md` so Codex sessions rooted there can
 work on the harness without using `backend_harness` as the primary working root.
 Use `backend_harness` only when verifying the mounted FastAPI integration or

@@ -23,11 +23,11 @@
 ## 사용한 원본 파일
 
 ```text
-C:\com2us\현재 내 옷 정보\옷 정보.txt
-C:\com2us\현재 내 옷 정보\내 옷 사진.jpg
+samples/closet/owned_item_info.txt
+samples/closet/owned_item_photo.jpg
 ```
 
-`옷 정보.txt`는 UTF-8로 읽으면 다음 정보가 복원됩니다.
+`owned_item_info.txt`는 UTF-8로 읽으면 다음 정보가 복원됩니다.
 
 ```text
 제품명 : 포켓 게이머 피그먼트 반팔 티셔츠 차콜
@@ -46,7 +46,7 @@ C:\com2us\현재 내 옷 정보\내 옷 사진.jpg
 ```json
 {
   "input_channel": "mobile_web",
-  "uploaded_photo": "C:\\com2us\\현재 내 옷 정보\\내 옷 사진.jpg",
+  "uploaded_photo": "samples/closet/owned_item_photo.jpg",
   "name": "포켓 게이머 피그먼트 반팔 티셔츠 차콜",
   "brand": "가까이 유니언즈",
   "category_hint": "반팔 티셔츠",
@@ -67,7 +67,7 @@ C:\com2us\현재 내 옷 정보\내 옷 사진.jpg
 }
 ```
 
-현재 harness에서는 위 입력을 직접 JSON form으로 받는 대신, `옷 정보.txt`를 모바일 입력 텍스트로 간주해 parsing합니다.
+현재 harness에서는 위 입력을 직접 JSON form으로 받는 대신, `owned_item_info.txt`를 모바일 입력 텍스트로 간주해 parsing합니다.
 
 ## 실행 명령
 
@@ -78,8 +78,8 @@ python backend_harness/run_closet_onboarding.py
 생성 결과:
 
 ```text
-C:\com2us\harness_outputs\closet_onboarding_db.json
-C:\com2us\harness_outputs\closet_onboarding_result.json
+harness_outputs\closet_onboarding_db.json
+harness_outputs\closet_onboarding_result.json
 ```
 
 ## API 경계
@@ -100,10 +100,10 @@ ApiHarness.post_closet_items_from_mobile_form(payload)
 {
   "user_id": "demo_user_001",
   "input_channel": "mobile_web",
-  "text_path": "C:\\com2us\\현재 내 옷 정보\\옷 정보.txt",
+  "text_path": "samples/closet/owned_item_info.txt",
   "uploaded_assets": [
     {
-      "path": "C:\\com2us\\현재 내 옷 정보\\내 옷 사진.jpg",
+      "path": "samples/closet/owned_item_photo.jpg",
       "asset_type_hint": "item_photo"
     }
   ],

@@ -1,16 +1,24 @@
+# Python
 .venv/
-node_modules/
 __pycache__/
 *.pyc
-harness_outputs/*.sqlite3
-harness_outputs/*.log
-harness_outputs/test_server*.log
-.env
-webapp-next/node_modules/
-webapp-next/.next/
+
+# Node
+node_modules/
 webapp-next/dist/
-webapp-next/.omc/
-.omc/
-harness_outputs/
-*.pyc
+webapp-next/.next/
 webapp-next/tsconfig.tsbuildinfo
+
+# Local config and secrets
+.env
+
+# Runtime outputs (run store SQLite, logs, smoke traces)
+harness_outputs/
+
+# Tesseract language data (download separately, see README)
+tools/tessdata/
+
+# AI coding tool state
+.omc/
+.omx/
+.claude/

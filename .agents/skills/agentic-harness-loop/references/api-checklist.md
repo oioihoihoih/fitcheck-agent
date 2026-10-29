@@ -9,38 +9,38 @@ Use:
 ```powershell
 $env:HARNESS_BASE_URL = "http://127.0.0.1:8000/api/harness/v1"
 $env:HARNESS_CLIENT_ID = "your-session-id"
-python C:\com2us\.agents\skills\agentic-harness-loop\scripts\harness_api.py health
-python C:\com2us\.agents\skills\agentic-harness-loop\scripts\harness_api.py ready
-python C:\com2us\.agents\skills\agentic-harness-loop\scripts\harness_api.py capabilities
-python C:\com2us\.agents\skills\agentic-harness-loop\scripts\harness_api.py capabilities --summary true
-python C:\com2us\.agents\skills\agentic-harness-loop\scripts\harness_api.py capabilities --summary true --require-sdk-event-type agent_eval_case_verification --require-sdk-event-type harness_verification_result --require-transcript-section agent_eval_case_verifications --require-transcript-section harness_verification_results --require-summary-field agent_eval_case_verification_count --require-summary-field harness_verification_result_count
-python C:\com2us\.agents\skills\agentic-harness-loop\scripts\harness_api.py sdk-initialize
-python C:\com2us\.agents\skills\agentic-harness-loop\scripts\harness_api.py sdk-mcp-status
-python C:\com2us\.agents\skills\agentic-harness-loop\scripts\harness_api.py sdk-context-usage
-python C:\com2us\.agents\skills\agentic-harness-loop\scripts\harness_api.py diagnostics --limit 20
-python C:\com2us\.agents\skills\agentic-harness-loop\scripts\harness_api.py tasks
-python C:\com2us\.agents\skills\agentic-harness-loop\scripts\harness_api.py sessions
-python C:\com2us\.agents\skills\agentic-harness-loop\scripts\harness_api.py eval-cases
-python C:\com2us\.agents\skills\agentic-harness-loop\scripts\harness_api.py eval-case-verify --eval-case-id 61
-python C:\com2us\.agents\skills\agentic-harness-loop\scripts\harness_api.py eval-case-verify --eval-case-id 61 --execute --cwd C:\com2us
-python C:\com2us\.agents\skills\agentic-harness-loop\scripts\harness_api.py eval-case-verify --eval-case-id 61 --execute --cwd C:\com2us --record-result-task-id task_...
-python C:\com2us\.agents\skills\agentic-harness-loop\scripts\harness_api.py loops
-python C:\com2us\.agents\skills\agentic-harness-loop\scripts\harness_api.py loop-create --name "Nightly verifier loop" --cwd C:\com2us\developer_harness --sandbox read-only --skill agentic-harness-loop --verification-command "python -B verify.py" --interval-seconds 600 --max-iterations 3 --prompt "Run the harness verifier loop and record gaps."
-python C:\com2us\.agents\skills\agentic-harness-loop\scripts\harness_api.py loop-tick --loop-id loop_... --force true --start false
-python C:\com2us\.agents\skills\agentic-harness-loop\scripts\harness_api.py loop-evidence --loop-id loop_...
-python C:\com2us\.agents\skills\agentic-harness-loop\scripts\harness_api.py events --task-id task_... --after 0
-python C:\com2us\.agents\skills\agentic-harness-loop\scripts\harness_api.py sdk-events --task-id task_... --summary true
-python C:\com2us\.agents\skills\agentic-harness-loop\scripts\harness_api.py client-transcript --task-id task_... --summary true
-python C:\com2us\.agents\skills\agentic-harness-loop\scripts\harness_api.py progress --task-id task_... --items-json "[{\"content\":\"Verify harness evidence\",\"active_form\":\"Verifying harness evidence\",\"status\":\"completed\"}]"
-python C:\com2us\.agents\skills\agentic-harness-loop\scripts\harness_api.py queued-message --task-id task_... --prompt "Follow up with the latest evidence." --priority next
-python C:\com2us\.agents\skills\agentic-harness-loop\scripts\harness_api.py cancel-queued-message --task-id task_... --message-uuid msg_...
-python C:\com2us\.agents\skills\agentic-harness-loop\scripts\harness_api.py annotate --task-id task_... --title "Provider probe session" --tag provider
-python C:\com2us\.agents\skills\agentic-harness-loop\scripts\harness_api.py fork --task-id task_... --prompt "Retry this task with the new evidence." --idempotency-key retry-001
-python C:\com2us\.agents\skills\agentic-harness-loop\scripts\harness_api.py command --task-id task_... --command pause
-python C:\com2us\.agents\skills\agentic-harness-loop\scripts\harness_api.py reply --task-id task_... --prompt "Resume this task with the new evidence." --background true
-python C:\com2us\.agents\skills\agentic-harness-loop\scripts\harness_api.py worker-tick
-python C:\com2us\.agents\skills\agentic-harness-loop\scripts\harness_api.py subagent --task-id task_... --cwd C:\com2us\developer_harness --sandbox read-only --prompt "Verify the parent task evidence." --background false
-python C:\com2us\.agents\skills\agentic-harness-loop\scripts\harness_api.py subagents --task-id task_...
+python .agents\skills\agentic-harness-loop\scripts\harness_api.py health
+python .agents\skills\agentic-harness-loop\scripts\harness_api.py ready
+python .agents\skills\agentic-harness-loop\scripts\harness_api.py capabilities
+python .agents\skills\agentic-harness-loop\scripts\harness_api.py capabilities --summary true
+python .agents\skills\agentic-harness-loop\scripts\harness_api.py capabilities --summary true --require-sdk-event-type agent_eval_case_verification --require-sdk-event-type harness_verification_result --require-transcript-section agent_eval_case_verifications --require-transcript-section harness_verification_results --require-summary-field agent_eval_case_verification_count --require-summary-field harness_verification_result_count
+python .agents\skills\agentic-harness-loop\scripts\harness_api.py sdk-initialize
+python .agents\skills\agentic-harness-loop\scripts\harness_api.py sdk-mcp-status
+python .agents\skills\agentic-harness-loop\scripts\harness_api.py sdk-context-usage
+python .agents\skills\agentic-harness-loop\scripts\harness_api.py diagnostics --limit 20
+python .agents\skills\agentic-harness-loop\scripts\harness_api.py tasks
+python .agents\skills\agentic-harness-loop\scripts\harness_api.py sessions
+python .agents\skills\agentic-harness-loop\scripts\harness_api.py eval-cases
+python .agents\skills\agentic-harness-loop\scripts\harness_api.py eval-case-verify --eval-case-id 61
+python .agents\skills\agentic-harness-loop\scripts\harness_api.py eval-case-verify --eval-case-id 61 --execute --cwd C:\com2us
+python .agents\skills\agentic-harness-loop\scripts\harness_api.py eval-case-verify --eval-case-id 61 --execute --cwd C:\com2us --record-result-task-id task_...
+python .agents\skills\agentic-harness-loop\scripts\harness_api.py loops
+python .agents\skills\agentic-harness-loop\scripts\harness_api.py loop-create --name "Nightly verifier loop" --cwd developer_harness --sandbox read-only --skill agentic-harness-loop --verification-command "python -B verify.py" --interval-seconds 600 --max-iterations 3 --prompt "Run the harness verifier loop and record gaps."
+python .agents\skills\agentic-harness-loop\scripts\harness_api.py loop-tick --loop-id loop_... --force true --start false
+python .agents\skills\agentic-harness-loop\scripts\harness_api.py loop-evidence --loop-id loop_...
+python .agents\skills\agentic-harness-loop\scripts\harness_api.py events --task-id task_... --after 0
+python .agents\skills\agentic-harness-loop\scripts\harness_api.py sdk-events --task-id task_... --summary true
+python .agents\skills\agentic-harness-loop\scripts\harness_api.py client-transcript --task-id task_... --summary true
+python .agents\skills\agentic-harness-loop\scripts\harness_api.py progress --task-id task_... --items-json "[{\"content\":\"Verify harness evidence\",\"active_form\":\"Verifying harness evidence\",\"status\":\"completed\"}]"
+python .agents\skills\agentic-harness-loop\scripts\harness_api.py queued-message --task-id task_... --prompt "Follow up with the latest evidence." --priority next
+python .agents\skills\agentic-harness-loop\scripts\harness_api.py cancel-queued-message --task-id task_... --message-uuid msg_...
+python .agents\skills\agentic-harness-loop\scripts\harness_api.py annotate --task-id task_... --title "Provider probe session" --tag provider
+python .agents\skills\agentic-harness-loop\scripts\harness_api.py fork --task-id task_... --prompt "Retry this task with the new evidence." --idempotency-key retry-001
+python .agents\skills\agentic-harness-loop\scripts\harness_api.py command --task-id task_... --command pause
+python .agents\skills\agentic-harness-loop\scripts\harness_api.py reply --task-id task_... --prompt "Resume this task with the new evidence." --background true
+python .agents\skills\agentic-harness-loop\scripts\harness_api.py worker-tick
+python .agents\skills\agentic-harness-loop\scripts\harness_api.py subagent --task-id task_... --cwd developer_harness --sandbox read-only --prompt "Verify the parent task evidence." --background false
+python .agents\skills\agentic-harness-loop\scripts\harness_api.py subagents --task-id task_...
 ```
 
 Add `--dry-run` before or after the subcommand to inspect a request without sending it.
@@ -52,7 +52,7 @@ The Python entrypoints include POSIX shebangs and executable bits, so Linux/WSL 
 Create a reusable workspace scaffold when starting from scratch:
 
 ```powershell
-python C:\com2us\.agents\skills\agentic-harness-loop\scripts\scaffold_agent_harness.py --output-dir C:\com2us\harness_outputs\agentic_scaffold --provider ollama --model qwen3-coder --client-id your-session-id --cwd C:\com2us\developer_harness
+python .agents\skills\agentic-harness-loop\scripts\scaffold_agent_harness.py --output-dir harness_outputs\agentic_scaffold --provider ollama --model qwen3-coder --client-id your-session-id --cwd developer_harness
 ```
 
 The scaffold writes:
@@ -68,10 +68,10 @@ The scaffold writes:
 Use `plan` when the next API is unclear:
 
 ```powershell
-python C:\com2us\.agents\skills\agentic-harness-loop\scripts\harness_api.py plan --goal provider
-python C:\com2us\.agents\skills\agentic-harness-loop\scripts\harness_api.py plan --goal loop
-python C:\com2us\.agents\skills\agentic-harness-loop\scripts\harness_api.py plan --goal trace
-python C:\com2us\.agents\skills\agentic-harness-loop\scripts\harness_api.py plan --goal failure --status 409
+python .agents\skills\agentic-harness-loop\scripts\harness_api.py plan --goal provider
+python .agents\skills\agentic-harness-loop\scripts\harness_api.py plan --goal loop
+python .agents\skills\agentic-harness-loop\scripts\harness_api.py plan --goal trace
+python .agents\skills\agentic-harness-loop\scripts\harness_api.py plan --goal failure --status 409
 ```
 
 `plan --goal provider` includes a compact capabilities summary command, while
@@ -93,20 +93,20 @@ HTTP response; it is not proof that a product route made a model call.
 Use `trace_ingest.py` when an agent run already produced JSON:
 
 ```powershell
-python C:\com2us\.agents\skills\agentic-harness-loop\scripts\agents_sdk_smoke.py --output-json C:\com2us\harness_outputs\agents-sdk-smoke.json
-python C:\com2us\.agents\skills\agentic-harness-loop\scripts\agents_sdk_smoke.py --scenario handoff --output-json C:\com2us\harness_outputs\agents-sdk-handoff-smoke.json
-python C:\com2us\.agents\skills\agentic-harness-loop\scripts\agents_sdk_smoke.py --scenario approval --output-json C:\com2us\harness_outputs\agents-sdk-approval-smoke.json
-python C:\com2us\.agents\skills\agentic-harness-loop\scripts\agents_sdk_smoke.py --scenario guardrail --output-json C:\com2us\harness_outputs\agents-sdk-guardrail-smoke.json
-python C:\com2us\.agents\skills\agentic-harness-loop\scripts\agents_sdk_smoke.py --scenario guardrail_tripwire --output-json C:\com2us\harness_outputs\agents-sdk-guardrail-tripwire-smoke.json
-python C:\com2us\.agents\skills\agentic-harness-loop\scripts\agents_sdk_smoke.py --scenario session --output-json C:\com2us\harness_outputs\agents-sdk-session-smoke.json
-python C:\com2us\.agents\skills\agentic-harness-loop\scripts\agents_sdk_smoke.py --scenario stream --output-json C:\com2us\harness_outputs\agents-sdk-stream-smoke.json
-python C:\com2us\.agents\skills\agentic-harness-loop\scripts\agents_sdk_smoke.py --scenario stream_handoff --output-json C:\com2us\harness_outputs\agents-sdk-stream-handoff-smoke.json
-python C:\com2us\.agents\skills\agentic-harness-loop\scripts\agents_sdk_smoke_matrix.py --scenario approval --scenario stream_handoff --probe-provider --publish-readback --client-id your-session-id
-python C:\com2us\.agents\skills\agentic-harness-loop\scripts\trace_ingest.py --dry-run --client-id your-session-id --task-id task_... --trace-json .\agent-result.json
-python C:\com2us\.agents\skills\agentic-harness-loop\scripts\trace_ingest.py --client-id your-session-id --task-id task_... --trace-json .\agent-result.json
-python C:\com2us\.agents\skills\agentic-harness-loop\scripts\trace_ingest.py --client-id your-session-id --task-id task_... --trace-json .\agent-result.json --readback --fail-on-readback-invalid
-python C:\com2us\.agents\skills\agentic-harness-loop\scripts\trace_ingest.py --client-id your-session-id --task-id task_... --trace-json .\agent-result.json --readback --fail-on-readback-invalid --compact-output --output-json .\trace-ingest-full.json
-python C:\com2us\.agents\skills\agentic-harness-loop\scripts\trace_ingest.py --client-id your-session-id --task-id task_... --trace-json .\agent-result.json --readback-only --fail-on-readback-invalid --compact-output --output-json .\trace-readback-only-full.json
+python .agents\skills\agentic-harness-loop\scripts\agents_sdk_smoke.py --output-json harness_outputs\agents-sdk-smoke.json
+python .agents\skills\agentic-harness-loop\scripts\agents_sdk_smoke.py --scenario handoff --output-json harness_outputs\agents-sdk-handoff-smoke.json
+python .agents\skills\agentic-harness-loop\scripts\agents_sdk_smoke.py --scenario approval --output-json harness_outputs\agents-sdk-approval-smoke.json
+python .agents\skills\agentic-harness-loop\scripts\agents_sdk_smoke.py --scenario guardrail --output-json harness_outputs\agents-sdk-guardrail-smoke.json
+python .agents\skills\agentic-harness-loop\scripts\agents_sdk_smoke.py --scenario guardrail_tripwire --output-json harness_outputs\agents-sdk-guardrail-tripwire-smoke.json
+python .agents\skills\agentic-harness-loop\scripts\agents_sdk_smoke.py --scenario session --output-json harness_outputs\agents-sdk-session-smoke.json
+python .agents\skills\agentic-harness-loop\scripts\agents_sdk_smoke.py --scenario stream --output-json harness_outputs\agents-sdk-stream-smoke.json
+python .agents\skills\agentic-harness-loop\scripts\agents_sdk_smoke.py --scenario stream_handoff --output-json harness_outputs\agents-sdk-stream-handoff-smoke.json
+python .agents\skills\agentic-harness-loop\scripts\agents_sdk_smoke_matrix.py --scenario approval --scenario stream_handoff --probe-provider --publish-readback --client-id your-session-id
+python .agents\skills\agentic-harness-loop\scripts\trace_ingest.py --dry-run --client-id your-session-id --task-id task_... --trace-json .\agent-result.json
+python .agents\skills\agentic-harness-loop\scripts\trace_ingest.py --client-id your-session-id --task-id task_... --trace-json .\agent-result.json
+python .agents\skills\agentic-harness-loop\scripts\trace_ingest.py --client-id your-session-id --task-id task_... --trace-json .\agent-result.json --readback --fail-on-readback-invalid
+python .agents\skills\agentic-harness-loop\scripts\trace_ingest.py --client-id your-session-id --task-id task_... --trace-json .\agent-result.json --readback --fail-on-readback-invalid --compact-output --output-json .\trace-ingest-full.json
+python .agents\skills\agentic-harness-loop\scripts\trace_ingest.py --client-id your-session-id --task-id task_... --trace-json .\agent-result.json --readback-only --fail-on-readback-invalid --compact-output --output-json .\trace-readback-only-full.json
 ```
 
 Use `agents_sdk_smoke_matrix.py` when multiple live SDK smoke scenarios should be run as one
@@ -686,13 +686,13 @@ both `/sdk-events` and `/client-transcript`; tripwire run errors should also pro
 Script examples:
 
 ```powershell
-python C:\com2us\.agents\skills\agentic-harness-loop\scripts\harness_api.py providers
-python C:\com2us\.agents\skills\agentic-harness-loop\scripts\harness_api.py probe --provider openai --model gpt-5.4-mini
-python C:\com2us\.agents\skills\agentic-harness-loop\scripts\harness_api.py probe --provider ollama --base-url http://localhost:11434/v1 --model qwen3-coder
-python C:\com2us\.agents\skills\agentic-harness-loop\scripts\harness_api.py diagnostics --limit 20
-python C:\com2us\.agents\skills\agentic-harness-loop\scripts\harness_api.py diagnostics --limit 20 --expect-diagnostic-id 113
-python C:\com2us\.agents\skills\agentic-harness-loop\scripts\harness_api.py diagnostics --limit 20 --expect-diagnostic-id 113 --expect-status completed --expect-provider openai --expect-model gpt-5.4-mini --expect-api-style responses
-python C:\com2us\.agents\skills\agentic-harness-loop\scripts\harness_api.py diagnostics --limit 20 --expect-diagnostic-id 113 --expect-status completed --expect-provider openai --expect-model gpt-5.4-mini --expect-api-style responses --expect-provider-request-attempted true --expect-provider-response-received true --expect-external-api-called true
+python .agents\skills\agentic-harness-loop\scripts\harness_api.py providers
+python .agents\skills\agentic-harness-loop\scripts\harness_api.py probe --provider openai --model gpt-5.4-mini
+python .agents\skills\agentic-harness-loop\scripts\harness_api.py probe --provider ollama --base-url http://localhost:11434/v1 --model qwen3-coder
+python .agents\skills\agentic-harness-loop\scripts\harness_api.py diagnostics --limit 20
+python .agents\skills\agentic-harness-loop\scripts\harness_api.py diagnostics --limit 20 --expect-diagnostic-id 113
+python .agents\skills\agentic-harness-loop\scripts\harness_api.py diagnostics --limit 20 --expect-diagnostic-id 113 --expect-status completed --expect-provider openai --expect-model gpt-5.4-mini --expect-api-style responses
+python .agents\skills\agentic-harness-loop\scripts\harness_api.py diagnostics --limit 20 --expect-diagnostic-id 113 --expect-status completed --expect-provider openai --expect-model gpt-5.4-mini --expect-api-style responses --expect-provider-request-attempted true --expect-provider-response-received true --expect-external-api-called true
 ```
 
 `diagnostics --expect-diagnostic-id N` adds `diagnostics_validation` to stdout and exits nonzero
@@ -732,29 +732,29 @@ Record evidence with:
 Script examples:
 
 ```powershell
-python C:\com2us\.agents\skills\agentic-harness-loop\scripts\harness_api.py task --cwd C:\com2us\developer_harness --sandbox read-only --idempotency-key inspect-provider-diagnostics-001 --skill agentic-harness-loop --verification-command "python -B verify.py" --prompt "Inspect provider diagnostics and propose the next eval."
-python C:\com2us\.agents\skills\agentic-harness-loop\scripts\harness_api.py task --start false --cwd C:\com2us\developer_harness --sandbox read-only --idempotency-key live-llm-evidence-holder-001 --prompt "Evidence holder for live LLM smoke."
-python C:\com2us\.agents\skills\agentic-harness-loop\scripts\harness_api.py tool-call --task-id task_... --call-id call_provider_probe_001 --tool-name provider_probe --input-json "{\"provider\":\"ollama\"}" --status running
-python C:\com2us\.agents\skills\agentic-harness-loop\scripts\harness_api.py observation --task-id task_... --call-id call_provider_probe_001 --tool-name provider_probe --result-json "{\"status\":\"configuration_required\"}" --evidence-ref diagnostic:missing-base-url
-python C:\com2us\.agents\skills\agentic-harness-loop\scripts\harness_api.py permission-decision --task-id task_... --call-id call_provider_probe_001 --tool-name provider_probe --behavior ask --decision-reason-json "{\"type\":\"mode\",\"mode\":\"default\"}"
-python C:\com2us\.agents\skills\agentic-harness-loop\scripts\harness_api.py progress --task-id task_... --items-json "[{\"item_id\":\"probe\",\"content\":\"Probe provider\",\"active_form\":\"Probing provider\",\"status\":\"completed\"},{\"item_id\":\"record\",\"content\":\"Record diagnostic evidence\",\"active_form\":\"Recording diagnostic evidence\",\"status\":\"completed\"}]"
-python C:\com2us\.agents\skills\agentic-harness-loop\scripts\harness_api.py queued-message --task-id task_... --prompt "Retry after provider configuration changes." --priority later --message-uuid msg_retry_provider
-python C:\com2us\.agents\skills\agentic-harness-loop\scripts\harness_api.py cancel-queued-message --task-id task_... --message-uuid msg_retry_provider
-python C:\com2us\.agents\skills\agentic-harness-loop\scripts\harness_api.py evidence --task-id task_...
-python C:\com2us\.agents\skills\agentic-harness-loop\scripts\harness_api.py events --task-id task_...
-python C:\com2us\.agents\skills\agentic-harness-loop\scripts\harness_api.py sdk-initialize
-python C:\com2us\.agents\skills\agentic-harness-loop\scripts\harness_api.py sdk-context-usage
-python C:\com2us\.agents\skills\agentic-harness-loop\scripts\harness_api.py sdk-events --task-id task_... --summary true
-python C:\com2us\.agents\skills\agentic-harness-loop\scripts\harness_api.py client-transcript --task-id task_... --summary true
-python C:\com2us\.agents\skills\agentic-harness-loop\scripts\harness_api.py tasks
-python C:\com2us\.agents\skills\agentic-harness-loop\scripts\harness_api.py sessions
-python C:\com2us\.agents\skills\agentic-harness-loop\scripts\harness_api.py annotate --task-id task_... --title "Harness evidence holder" --summary "Tracks live SDK smoke evidence."
-python C:\com2us\.agents\skills\agentic-harness-loop\scripts\harness_api.py fork --task-id task_... --prompt "Retry with updated provider profile." --idempotency-key retry-provider-profile-001
-python C:\com2us\.agents\skills\agentic-harness-loop\scripts\harness_api.py command --task-id task_... --command pause
-python C:\com2us\.agents\skills\agentic-harness-loop\scripts\harness_api.py reply --task-id task_... --prompt "Continue after updated provider profile." --background true
-python C:\com2us\.agents\skills\agentic-harness-loop\scripts\harness_api.py sdk-events --task-id task_...
-python C:\com2us\.agents\skills\agentic-harness-loop\scripts\harness_api.py client-transcript --task-id task_...
-python C:\com2us\.agents\skills\agentic-harness-loop\scripts\harness_api.py eval-cases
+python .agents\skills\agentic-harness-loop\scripts\harness_api.py task --cwd developer_harness --sandbox read-only --idempotency-key inspect-provider-diagnostics-001 --skill agentic-harness-loop --verification-command "python -B verify.py" --prompt "Inspect provider diagnostics and propose the next eval."
+python .agents\skills\agentic-harness-loop\scripts\harness_api.py task --start false --cwd developer_harness --sandbox read-only --idempotency-key live-llm-evidence-holder-001 --prompt "Evidence holder for live LLM smoke."
+python .agents\skills\agentic-harness-loop\scripts\harness_api.py tool-call --task-id task_... --call-id call_provider_probe_001 --tool-name provider_probe --input-json "{\"provider\":\"ollama\"}" --status running
+python .agents\skills\agentic-harness-loop\scripts\harness_api.py observation --task-id task_... --call-id call_provider_probe_001 --tool-name provider_probe --result-json "{\"status\":\"configuration_required\"}" --evidence-ref diagnostic:missing-base-url
+python .agents\skills\agentic-harness-loop\scripts\harness_api.py permission-decision --task-id task_... --call-id call_provider_probe_001 --tool-name provider_probe --behavior ask --decision-reason-json "{\"type\":\"mode\",\"mode\":\"default\"}"
+python .agents\skills\agentic-harness-loop\scripts\harness_api.py progress --task-id task_... --items-json "[{\"item_id\":\"probe\",\"content\":\"Probe provider\",\"active_form\":\"Probing provider\",\"status\":\"completed\"},{\"item_id\":\"record\",\"content\":\"Record diagnostic evidence\",\"active_form\":\"Recording diagnostic evidence\",\"status\":\"completed\"}]"
+python .agents\skills\agentic-harness-loop\scripts\harness_api.py queued-message --task-id task_... --prompt "Retry after provider configuration changes." --priority later --message-uuid msg_retry_provider
+python .agents\skills\agentic-harness-loop\scripts\harness_api.py cancel-queued-message --task-id task_... --message-uuid msg_retry_provider
+python .agents\skills\agentic-harness-loop\scripts\harness_api.py evidence --task-id task_...
+python .agents\skills\agentic-harness-loop\scripts\harness_api.py events --task-id task_...
+python .agents\skills\agentic-harness-loop\scripts\harness_api.py sdk-initialize
+python .agents\skills\agentic-harness-loop\scripts\harness_api.py sdk-context-usage
+python .agents\skills\agentic-harness-loop\scripts\harness_api.py sdk-events --task-id task_... --summary true
+python .agents\skills\agentic-harness-loop\scripts\harness_api.py client-transcript --task-id task_... --summary true
+python .agents\skills\agentic-harness-loop\scripts\harness_api.py tasks
+python .agents\skills\agentic-harness-loop\scripts\harness_api.py sessions
+python .agents\skills\agentic-harness-loop\scripts\harness_api.py annotate --task-id task_... --title "Harness evidence holder" --summary "Tracks live SDK smoke evidence."
+python .agents\skills\agentic-harness-loop\scripts\harness_api.py fork --task-id task_... --prompt "Retry with updated provider profile." --idempotency-key retry-provider-profile-001
+python .agents\skills\agentic-harness-loop\scripts\harness_api.py command --task-id task_... --command pause
+python .agents\skills\agentic-harness-loop\scripts\harness_api.py reply --task-id task_... --prompt "Continue after updated provider profile." --background true
+python .agents\skills\agentic-harness-loop\scripts\harness_api.py sdk-events --task-id task_...
+python .agents\skills\agentic-harness-loop\scripts\harness_api.py client-transcript --task-id task_...
+python .agents\skills\agentic-harness-loop\scripts\harness_api.py eval-cases
 ```
 
 The `events --task-id` command should return a `harness_event_sse_replay` envelope with
@@ -873,8 +873,8 @@ status-level, provider-level, and API-style-level usage back to stored trace evi
 Subagent examples:
 
 ```powershell
-python C:\com2us\.agents\skills\agentic-harness-loop\scripts\harness_api.py subagent --task-id task_... --cwd C:\com2us\developer_harness --sandbox read-only --skill agentic-harness-loop --idempotency-key verify-child-001 --background false --prompt "Inspect parent evidence and report gaps."
-python C:\com2us\.agents\skills\agentic-harness-loop\scripts\harness_api.py subagents --task-id task_...
+python .agents\skills\agentic-harness-loop\scripts\harness_api.py subagent --task-id task_... --cwd developer_harness --sandbox read-only --skill agentic-harness-loop --idempotency-key verify-child-001 --background false --prompt "Inspect parent evidence and report gaps."
+python .agents\skills\agentic-harness-loop\scripts\harness_api.py subagents --task-id task_...
 ```
 
 ## Eval Seeds
@@ -896,10 +896,10 @@ Create eval cases when a trace or runtime gap is repeatable:
 Script example:
 
 ```powershell
-python C:\com2us\.agents\skills\agentic-harness-loop\scripts\harness_api.py eval-case --name "provider configuration regression" --source-task-id task_... --failure-label configuration_required --input-json "{\"provider\":\"local_missing\"}" --expected-json "{\"status\":\"configuration_required\"}" --verifier-command "python -B verify.py" --evidence-ref task:task_...
-python C:\com2us\.agents\skills\agentic-harness-loop\scripts\harness_api.py eval-case-verify --eval-case-id <eval_case_id>
-python C:\com2us\.agents\skills\agentic-harness-loop\scripts\harness_api.py eval-case-verify --eval-case-id <eval_case_id> --execute --cwd C:\com2us
-python C:\com2us\.agents\skills\agentic-harness-loop\scripts\harness_api.py eval-case-verify --eval-case-id <eval_case_id> --execute --cwd C:\com2us --record-result-task-id task_...
+python .agents\skills\agentic-harness-loop\scripts\harness_api.py eval-case --name "provider configuration regression" --source-task-id task_... --failure-label configuration_required --input-json "{\"provider\":\"local_missing\"}" --expected-json "{\"status\":\"configuration_required\"}" --verifier-command "python -B verify.py" --evidence-ref task:task_...
+python .agents\skills\agentic-harness-loop\scripts\harness_api.py eval-case-verify --eval-case-id <eval_case_id>
+python .agents\skills\agentic-harness-loop\scripts\harness_api.py eval-case-verify --eval-case-id <eval_case_id> --execute --cwd C:\com2us
+python .agents\skills\agentic-harness-loop\scripts\harness_api.py eval-case-verify --eval-case-id <eval_case_id> --execute --cwd C:\com2us --record-result-task-id task_...
 ```
 
 If shell quoting is fragile:
@@ -907,7 +907,7 @@ If shell quoting is fragile:
 ```powershell
 Set-Content -Encoding UTF8 .\eval-input.json '{"provider":"local_missing"}'
 Set-Content -Encoding UTF8 .\eval-expected.json '{"status":"configuration_required"}'
-python C:\com2us\.agents\skills\agentic-harness-loop\scripts\harness_api.py eval-case --name "provider configuration regression" --input-json @.\eval-input.json --expected-json @.\eval-expected.json
+python .agents\skills\agentic-harness-loop\scripts\harness_api.py eval-case --name "provider configuration regression" --input-json @.\eval-input.json --expected-json @.\eval-expected.json
 ```
 
 ## Worker Safety
@@ -919,8 +919,8 @@ python C:\com2us\.agents\skills\agentic-harness-loop\scripts\harness_api.py eval
 Script example:
 
 ```powershell
-python C:\com2us\.agents\skills\agentic-harness-loop\scripts\harness_api.py worker-tick
-python C:\com2us\.agents\skills\agentic-harness-loop\scripts\harness_api.py heartbeat --task-id task_... --lease-epoch 1 --lease-seconds 300
+python .agents\skills\agentic-harness-loop\scripts\harness_api.py worker-tick
+python .agents\skills\agentic-harness-loop\scripts\harness_api.py heartbeat --task-id task_... --lease-epoch 1 --lease-seconds 300
 ```
 
 ## Reporting Rules

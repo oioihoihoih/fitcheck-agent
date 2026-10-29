@@ -11,7 +11,7 @@ Use `scripts/scaffold_agent_harness.py` when starting a new agentic harness work
 
 ## Workflow
 
-1. Read `C:\com2us\developer_harness\AGENTS.md` and `C:\com2us\docs\20-general-agent-loop-engineering.md` before changing harness behavior.
+1. Read `developer_harness\AGENTS.md` and `docs\20-general-agent-loop-engineering.md` before changing harness behavior.
 2. Call `GET /api/harness/v1/health`, `GET /api/harness/v1/ready`, then `GET /api/harness/v1/capabilities` and confirm the needed capabilities are advertised.
 3. For LLM-backed work, select an explicit `llm_provider` profile and call `POST /api/harness/v1/llm/probe` before saying a provider is connected.
 4. Create delegated tasks with `POST /api/harness/v1/tasks`, using `X-Harness-Client-Id`, an explicit `cwd`, sandbox, verification commands, and `metadata.agentic_loop_template` when applicable.

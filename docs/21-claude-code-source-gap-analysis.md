@@ -10,11 +10,11 @@ It focuses on SDK-like agent construction behavior, not FitCheck product UX.
 
 Current com2us baseline:
 
-- Product route: `C:\com2us\backend_harness\app\routes\agent.py`
-- Product runtime: `C:\com2us\backend_harness\app\agent_runtime.py`
-- Product tool registry: `C:\com2us\backend_harness\app\tool_registry.py`
-- Product LLM adapter: `C:\com2us\backend_harness\app\tools\llm_client.py`
-- Generic developer harness: `C:\com2us\developer_harness`
+- Product route: `backend_harness\app\routes\agent.py`
+- Product runtime: `backend_harness\app\agent_runtime.py`
+- Product tool registry: `backend_harness\app\tool_registry.py`
+- Product LLM adapter: `backend_harness\app\tools\llm_client.py`
+- Generic developer harness: `developer_harness`
 
 Important current fact: com2us still uses a custom product loop rather than the
 OpenAI Agents SDK orchestration layer. The OpenAI cloud transport now uses the
@@ -709,7 +709,7 @@ Remaining work:
 Use:
 
 ```powershell
-cd C:\com2us\backend_harness
+cd backend_harness
 node .\verify_frontend_ui_smoke.js
 node .\verify_browser_ui_smoke.js
 python -B verify_production_agent_runtime.py
@@ -719,6 +719,6 @@ python -B verify_local_llm_tool_adapter.py
 For generic harness changes:
 
 ```powershell
-cd C:\com2us\developer_harness
+cd developer_harness
 python -B verify.py
 ```

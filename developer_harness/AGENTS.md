@@ -20,7 +20,7 @@ Work here is about:
 - provider profile diagnostics for OpenAI Responses-style APIs and local
   OpenAI-compatible chat-completions endpoints.
 
-FitCheck production behavior lives under `C:\com2us\backend_harness\app` and
+FitCheck production behavior lives under `backend_harness\app` and
 the `/api/agent/runs` route. Do not route product behavior through this generic
 harness unless the task explicitly asks for development orchestration.
 
@@ -41,7 +41,7 @@ SDK/agentic AI construction support through loop engineering:
 Detailed reference:
 
 ```text
-C:\com2us\docs\20-general-agent-loop-engineering.md
+docs\20-general-agent-loop-engineering.md
 ```
 
 ## API Rules
@@ -99,14 +99,14 @@ Run from this directory when possible:
 python -B verify.py
 ```
 
-From `C:\com2us`, the equivalent command is:
+From the repository root, the equivalent command is:
 
 ```powershell
 python developer_harness\verify.py
 ```
 
 If changing mounted FastAPI behavior, also run the relevant backend smoke or
-infrastructure verifier from `C:\com2us\backend_harness`, but keep product
+infrastructure verifier from `backend_harness`, but keep product
 runtime changes separate from generic harness changes.
 
 ## Communication
