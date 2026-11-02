@@ -124,6 +124,30 @@ npm install && npm run verify:frontend
 
 실제 LLM·검색 provider를 호출하는 live smoke는 환경 변수로 명시적으로 켜야 실행됩니다. 자세한 방법은 [실행·검증 상세 가이드](docs/00-runbook.md)를 참고하세요.
 
+## 한계
+
+현재 FitCheck는 **"LLM이 도구를 골라 실행하고 근거를 저장하는 Agent runtime 프로토타입"**입니다. "사진 한 장이면 핏을 이해하고 항상 살 수 있는 후보 3~5개를 골라 주는 완성형 쇼핑 에이전트"는 아닙니다.
+
+- **근거 확보 성공률이 불안정합니다.** 쇼핑몰별 adapter나 공식 상품 API 없이 범용 검색 → 페이지 fetch → OCR에 기대기 때문에 403, 동적 렌더링, 텍스트 없는 상세 이미지(`completed_empty`)에서 실측·소재를 자주 놓칩니다. 2026-06-09 live 재검증에서는 후보 5개가 모두 `need_more_info`로 끝나 최종 리포트 없이 `waiting_for_user`에서 멈췄습니다. 근거 없이 추천하지 않도록 설계한 결과이지만, 사용자 입장에서는 추천이 끝나지 않은 것입니다.
+- **사진 이해가 제한적입니다.** vision은 기본값이 꺼져 있습니다(`FITCHECK_VISION_PROVIDER=not_connected`). OpenAI vision을 연결할 수는 있지만, 착용 사진만으로 오버핏/슬림핏·실제 색감·소재를 판정하는 정확도는 검증하지 않았습니다.
+- **매칭 점수는 손으로 정한 규칙입니다.** 점수는 `실측 45% + 소재 20% + 가격 15% + 근거 신뢰도 20%`로 계산하며, 이 가중치를 실제 만족도 데이터로 검증하지 않았습니다. 프로젝트가 내세우는 실루엣·디자인은 신호 일치 여부로만 표시되고 점수에는 들어가지 않습니다. 핵심 실측이 하나라도 빠지면 바로 `need_more_info`가 되어 실행이 자주 멈추는 원인이 됩니다.
+- **옷의 속성을 다 담지 못합니다.** 브랜드마다 사이즈 체계가 다른데 `(카테고리, 브랜드)` 단위 사이즈 프로필이 없습니다. 소재명을 뽑아도 두께감·촉감·신축성은 알 수 없고, 리뷰는 주관적이라 보조 신호로만 씁니다.
+- **추천 품질을 정량 평가하지 않았습니다.** [평가 계획](docs/07-test-and-evaluation.md)에 추출 정확도와 매칭 정확도 같은 지표는 정의했지만, 실제로 측정하지는 않았습니다. 테스트 fixture도 기준 옷 1벌과 후보 3개뿐입니다.
+- **계정이 없습니다.** 옷장, 실행 기록, 즐겨찾기가 익명 세션 쿠키에 묶여 있어 쿠키를 지우거나 기기를 바꾸면 사라집니다. 로그인, 사용자별 권한, 개인정보 삭제 절차도 없습니다.
+- **운영 인프라가 없습니다.** 저장소는 SQLite 파일 하나이고 PostgreSQL·migration·Docker·CI·공개 배포 URL이 없습니다.
+- **비용과 지연이 큽니다.** 한 번 실행에 최대 18턴의 LLM 호출과 여러 번의 검색·fetch·OCR이 일어나 수십 초가 걸리고 OpenAI·Brave API 비용이 듭니다. 실행별 비용 표시는 아직 없습니다.
+- **로컬 LLM은 모의 검증까지만 했습니다.** 2026-06 점검 기준으로 Ollama·LM Studio 같은 OpenAI-compatible 경로는 어댑터 검증만 했고, 실제 로컬 모델로 production route를 끝까지 돌린 결과는 확인하지 않았습니다.
+
+## 아쉬운 점
+
+- **파일이 너무 커졌습니다.** 기능을 계속 덧붙이면서 `tool_registry.py`가 약 10,800줄, `agent_runtime.py`가 약 6,100줄이 됐습니다. 도구별·단계별로 모듈을 나누지 못했습니다.
+- **테스트가 pytest가 아니라 거대한 검증 스크립트입니다.** `verify_production_agent_runtime.py`(약 9,000줄)와 `developer_harness/verify.py`(약 13,700줄)는 첫 실패에서 바로 멈춰 어디가 깨졌는지 찾기 어렵고, CI에도 연결하지 않았습니다. 일부 케이스는 로컬 `.env` 설정에 기대고 있어, 설정이 없는 깨끗한 환경에서는 `verify_production_agent_runtime.py`의 rate-limit 재개 케이스가 `configuration_required`로 실패합니다.
+- **제품 코드와 개발 도구가 섞여 있습니다.** Codex·Claude 세션을 돌리기 위한 `developer_harness/`, `.agents/`, `.codex/`가 FitCheck 제품 코드와 같은 저장소에 있고, 작업 로그 성격의 긴 문서(예: `docs/18`, 약 360KB)가 많아 핵심 설계를 찾기 어렵습니다.
+- **사용자 경험이 개발자 쪽에 머물러 있습니다.** 예산·사이즈 같은 소비자 필터 대신 `max_turns`, `tool_budget` 같은 개발용 설정이 화면에 노출되고, 첫 실행 온보딩과 실행 계획 체크리스트가 없습니다.
+- **남은 알려진 문제가 있습니다.** `/presentation` 경로는 저장소에 없는 `submission/fitcheck_agent_presentation.html`을 가리켜 열면 오류가 납니다. 이미 막아 둔 레거시 deterministic route와 이전 UI(`webapp/`)도 코드에 그대로 남아 있습니다.
+
+남은 개선 항목과 우선순위는 [Improvement Backlog](docs/25-improvement-backlog.md)에 정리되어 있습니다.
+
 ## 문서
 
 - [실행·검증 상세 가이드](docs/00-runbook.md): API 목록, provider 설정, live smoke
